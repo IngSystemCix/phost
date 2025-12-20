@@ -1,0 +1,225 @@
+# Sistema Operativo
+# Windows
+Thumbs.db
+Desktop.ini
+.DS_Store
+ehthumbs.db
+*.lnk
+
+# Linux/Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# Datos Sensibles y Configuración
+# ============================================================================
+
+# Credenciales y archivos de configuración generados
+config.local.php
+config.local.inc.php
+php.ini
+.env
+.env.local
+.env.*.local
+
+# phpMyAdmin
+htdocs/phpMyAdmin/config.inc.php
+htdocs/phpMyAdmin/config.sample.inc.php
+
+# Archivos de configuración del servidor (personalizados)
+bin/apache/conf/httpd-local.conf
+bin/nginx/conf/nginx-local.conf
+
+# ============================================================================
+# Directorios de Ejecución y Datos (Excluyendo Versionado)
+# ============================================================================
+
+# Logs de servicios
+logs/
+logs/**/*
+!logs/.gitkeep
+
+# Backups y dumps de base de datos
+backups/
+backups/**/*
+!backups/.gitkeep
+
+# Datos de base de datos (si se incluyen en desarrollo local)
+bin/mariadb/data/
+bin/mariadb/data/**/*
+
+# Archivos temporales y caché
+tmp/
+temp/
+*.tmp
+*.log
+*.pid
+
+# ============================================================================
+# Binarios y Dependencias (Opcionales si no están en repositorio)
+# ============================================================================
+
+# Si los binarios NO están en el repo (recomendado para proyectos grandes)
+# Descomenta estas líneas:
+# bin/apache/bin/*.exe
+# bin/apache/modules/*.so
+# bin/nginx/*.exe
+# bin/mariadb/bin/*.exe
+# bin/php/*.exe
+
+# Archivos compilados y objetos
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# ============================================================================
+# IDE y Editores
+# ============================================================================
+
+# Visual Studio Code
+.vscode/
+.vscode/**/*
+!.vscode/settings.json.example
+!.vscode/extensions.json
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.sln.user
+*.vcxproj.user
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim/Neovim
+.vim/
+Session.vim
+.swp
+.swo
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================================================
+# Node.js (si se usa npm/webpack para frontend)
+# ============================================================================
+
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json.local
+.npm
+
+# ============================================================================
+# Python (si se usan scripts Python)
+# ============================================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+
+# ============================================================================
+# Archivos Específicos del Proyecto
+# ============================================================================
+
+# Cache de aplicaciones PHP
+htdocs/**/cache/
+htdocs/**/tmp/
+
+# Sesiones PHP
+htdocs/**/sessions/
+
+# Archivos de bloqueo
+*.lock
+
+# Archivos generados automáticamente
+installer/dist/
+installer/build/
+
+# ============================================================================
+# Documentación Generada (Opcional)
+# ============================================================================
+
+# Doxygen
+docs/generated/
+docs/api/
+
+# ============================================================================
+# Testing y Cobertura
+# ============================================================================
+
+coverage/
+.coverage
+htmlcov/
+pytest-report.xml
+phpunit-report.xml
+
+# ============================================================================
+# OS Específicos - Archivos Temporales
+# ============================================================================
+
+# Archivos de recuperación
+*.recover
+*.bak
+*.backup
+
+# Archivos de sistema
+.Spotlight-V100
+.Trashes
+.fseventsd
+._*
+
+# ============================================================================
+# Otros
+# ============================================================================
+
+# Archivos de control de versión locales
+.git-credentials
+.gitcredentials
+
+# Historial de terminal
+.bash_history
+.zsh_history
+.fish_history
+powershell_history.txt
+
+# Archivos de sincronización
+Sync.log
+*.sync
