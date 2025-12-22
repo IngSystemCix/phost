@@ -63,7 +63,6 @@ typedef int my_socket;
 #endif /* my_socket_defined */
 #endif /* MY_GLOBAL_INCLUDED */
 
-#include "mariadb_capi_rename.h"
 #include "mysql_version.h"
 #include "mysql_com.h"
 #include "mysql_time.h"
@@ -141,10 +140,6 @@ typedef unsigned long long my_ulonglong;
 #define ER_WRONG_FK_OPTION_FOR_VIRTUAL_COLUMN ER_WRONG_FK_OPTION_FOR_GENERATED_COLUMN
 #define ER_UNSUPPORTED_ACTION_ON_VIRTUAL_COLUMN ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN
 #define ER_UNSUPPORTED_ENGINE_FOR_VIRTUAL_COLUMNS ER_UNSUPPORTED_ENGINE_FOR_GENERATED_COLUMNS
-#define ER_KEY_COLUMN_DOES_NOT_EXITS ER_KEY_COLUMN_DOES_NOT_EXIST
-#define ER_DROP_PARTITION_NON_EXISTENT ER_PARTITION_DOES_NOT_EXIST
-#define ER_SPATIAL_CANT_HAVE_NULL ER_INDEX_CANNOT_HAVE_NULL
-#define ER_INNODB_NO_FT_TEMP_TABLE ER_NO_INDEX_ON_TEMPORARY
 
 typedef struct st_mysql_rows {
   struct st_mysql_rows *next;		/* list of rows */
@@ -270,6 +265,7 @@ typedef struct st_mysql
   char		*host,*user,*passwd,*unix_socket,*server_version,*host_info;
   char          *info, *db;
   const struct charset_info_st *charset;
+  MYSQL_FIELD	*fields;
   MEM_ROOT	field_alloc;
   my_ulonglong affected_rows;
   my_ulonglong insert_id;		/* id if insert on table with NEXTNR */
@@ -291,9 +287,7 @@ typedef struct st_mysql
   /* session-wide random string */
   char	        scramble[SCRAMBLE_LENGTH+1];
   my_bool       auto_local_infile;
-  void          *unused2, *unused3;
-  MYSQL_FIELD	*fields;
-  const char    *tls_self_signed_error;
+  void *unused2, *unused3, *unused4, *unused5;
 
   LIST  *stmts;                     /* list of all statements */
   const struct st_mysql_methods *methods;
@@ -328,15 +322,7 @@ typedef struct st_mysql_res {
 } MYSQL_RES;
 
 
-/*
-  We should not define MYSQL_CLIENT when the mysql.h is included
-  by the server or server plugins.
-  Now it is important only for the SQL service to work so we rely on
-  the MYSQL_SERVICE_SQL to check we're compiling the server/plugin
-  related file.
-*/
-
-#if !defined(MYSQL_SERVICE_SQL) && !defined(MYSQL_CLIENT)
+#if !defined(MYSQL_SERVER) && !defined(MYSQL_CLIENT)
 #define MYSQL_CLIENT
 #endif
 
@@ -368,7 +354,7 @@ typedef struct st_mysql_parameters
 */
 #define MYSQL_WAIT_TIMEOUT 8
 
-#if !defined(MYSQL_SERVICE_SQL)
+#if !defined(MYSQL_SERVER) && !defined(EMBEDDED_LIBRARY)
 #define max_allowed_packet (*mysql_get_parameters()->p_max_allowed_packet)
 #define net_buffer_length (*mysql_get_parameters()->p_net_buffer_length)
 #endif
@@ -669,7 +655,7 @@ enum enum_mysql_stmt_state
 
   length         - On input: in case when lengths of input values
                    are different for each execute, you can set this to
-                   point at a variable containing value length. This
+                   point at a variable containining value length. This
                    way the value length can be different in each execute.
                    If length is not NULL, buffer_length is not used.
                    Note, length can even point at buffer_length if

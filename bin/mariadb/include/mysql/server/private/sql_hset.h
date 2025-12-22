@@ -15,7 +15,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA */
 
-#include "my_global.h"
 #include "hash.h"
 
 
@@ -29,15 +28,17 @@ class Hash_set
 public:
   enum { START_SIZE= 8 };
   /**
-    Constructs an empty unique hash.
+    Constructs an empty hash. Does not allocate memory, it is done upon
+    the first insert. Thus does not cause or return errors.
   */
-  Hash_set(PSI_memory_key psi_key,
-           const uchar *(*K)(const void *, size_t *, my_bool),
+  Hash_set(PSI_memory_key psi_key, uchar *(*K)(const T *, size_t *, my_bool),
            CHARSET_INFO *cs= &my_charset_bin)
   {
-    my_hash_init(psi_key, &m_hash, cs, START_SIZE, 0, 0, K, 0, HASH_UNIQUE);
+    my_hash_clear(&m_hash);
+    m_hash.get_key= (my_hash_get_key)K;
+    m_hash.charset= cs;
+    m_hash.array.m_psi_key= psi_key;
   }
-
   Hash_set(PSI_memory_key psi_key, CHARSET_INFO *charset, ulong default_array_elements,
            size_t key_offset, size_t key_length, my_hash_get_key get_key,
            void (*free_element)(void*), uint flags)
@@ -62,27 +63,19 @@ public:
     @retval FALSE OK. The value either was inserted or existed
                   in the hash.
   */
-  bool insert(const T *value)
+  bool insert(T *value)
   {
+    my_hash_init_opt(m_hash.array.m_psi_key, &m_hash, m_hash.charset,
+                     START_SIZE, 0, 0, m_hash.get_key, 0, HASH_UNIQUE);
     return my_hash_insert(&m_hash, reinterpret_cast<const uchar*>(value));
   }
-  bool remove(const T *value)
+  bool remove(T *value)
   {
-    return my_hash_delete(&m_hash,
-                          reinterpret_cast<uchar*>(const_cast<T*>(value)));
+    return my_hash_delete(&m_hash, reinterpret_cast<uchar*>(value));
   }
   T *find(const void *key, size_t klen) const
   {
     return (T*)my_hash_search(&m_hash, reinterpret_cast<const uchar *>(key), klen);
-  }
-
-  T *find(const T *other) const
-  {
-    DBUG_ASSERT(m_hash.get_key);
-    size_t klen;
-    const uchar *key= m_hash.get_key(reinterpret_cast<const uchar *>(other),
-                                     &klen, false);
-    return find(key, klen);
   }
   /** Is this hash set empty? */
   bool is_empty() const { return m_hash.records == 0; }
@@ -95,53 +88,26 @@ public:
     return reinterpret_cast<T*>(my_hash_element(const_cast<HASH*>(&m_hash), i));
   }
   /** An iterator over hash elements. Is not insert-stable. */
-  class Iterator;
-  using value_type= T;
-  using iterator= Iterator;
-  using const_iterator= const Iterator;
-
-  Iterator begin() const { return Iterator(*this, 0); }
-  Iterator end() const { return Iterator(*this, m_hash.records); }
-
   class Iterator
   {
   public:
-    using iterator_category= std::forward_iterator_tag;
-    using value_type= T;
-    using difference_type= std::ptrdiff_t;
-    using pointer= T *;
-    using reference= T &;
-
-    Iterator(const Hash_set &hash_set, uint idx=0) :
-      m_hash(&hash_set.m_hash), m_idx(idx) {}
-
-    Iterator &operator++()
+    Iterator(Hash_set &hash_set)
+      : m_hash(&hash_set.m_hash),
+        m_idx(0)
+    {}
+    /**
+      Return the current element and reposition the iterator to the next
+      element.
+    */
+    inline T *operator++(int)
     {
-      DBUG_ASSERT(m_idx < m_hash->records);
-      m_idx++;
-      return *this;
+      if (m_idx < m_hash->records)
+        return reinterpret_cast<T*>(my_hash_element(m_hash, m_idx++));
+      return NULL;
     }
-
-    T &operator*()
-    {
-      return *reinterpret_cast<T *>(my_hash_element(m_hash, m_idx));
-    }
-
-    T *operator->()
-    {
-      return reinterpret_cast<T *>(my_hash_element(m_hash, m_idx));
-    }
-
-    bool operator==(const typename Hash_set<T>::iterator &rhs)
-    {
-      return m_idx == rhs.m_idx && m_hash == rhs.m_hash;
-    }
-    bool operator!=(const typename Hash_set<T>::iterator &rhs)
-    {
-      return m_idx != rhs.m_idx || m_hash != rhs.m_hash;
-    }
+    void rewind() { m_idx= 0; }
   private:
-    const HASH *m_hash;
+    HASH *m_hash;
     uint m_idx;
   };
 private:

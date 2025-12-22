@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2017, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -54,6 +54,7 @@
 #ifdef _WIN32
 typedef struct thread_attr pthread_attr_t;
 typedef DWORD pthread_t;
+typedef DWORD pthread_key_t;
 #endif
 
 /*
@@ -1441,7 +1442,7 @@ typedef void (*register_socket_v1_t)
   @return an instrumented mutex
 */
 typedef struct PSI_mutex* (*init_mutex_v1_t)
-  (PSI_mutex_key key, void *identity);
+  (PSI_mutex_key key, const void *identity);
 
 /**
   Mutex instrumentation destruction API.
@@ -1456,7 +1457,7 @@ typedef void (*destroy_mutex_v1_t)(struct PSI_mutex *mutex);
   @return an instrumented rwlock
 */
 typedef struct PSI_rwlock* (*init_rwlock_v1_t)
-  (PSI_rwlock_key key, void *identity);
+  (PSI_rwlock_key key, const void *identity);
 
 /**
   Rwlock instrumentation destruction API.
@@ -1471,7 +1472,7 @@ typedef void (*destroy_rwlock_v1_t)(struct PSI_rwlock *rwlock);
   @return an instrumented cond
 */
 typedef struct PSI_cond* (*init_cond_v1_t)
-  (PSI_cond_key key, void *identity);
+  (PSI_cond_key key, const void *identity);
 
 /**
   Cond instrumentation destruction API.
@@ -1625,12 +1626,6 @@ typedef void (*set_thread_os_id_v1_t)(struct PSI_thread *thread);
 typedef struct PSI_thread* (*get_thread_v1_t)(void);
 
 /**
-  Get name of the thread, according to the thread class.
-  The name is returns without the thread/subsystem prefix.
-*/
-typedef const char* (*get_thread_class_name_v1_t)(void);
-
-/**
   Assign a user name to the instrumented thread.
   @param user the user name
   @param user_len the user name length
@@ -1696,15 +1691,6 @@ typedef void (*set_thread_info_v1_t)(const char* info, uint info_len);
   @param thread the thread instrumentation
 */
 typedef void (*set_thread_v1_t)(struct PSI_thread *thread);
-
-/**
-  Assign the remote (peer) port to the instrumented thread.
-
-  @param thread    pointer to the thread instrumentation
-  @param port      the remote port
-*/
-typedef void (*set_thread_peer_port_v1_t)(PSI_thread *thread,
-                                          unsigned int port);
 
 /** Delete the current thread instrumentation. */
 typedef void (*delete_current_thread_v1_t)(void);
@@ -2389,7 +2375,7 @@ typedef void (*execute_prepared_stmt_v1_t)
   (PSI_statement_locker *locker, PSI_prepared_stmt* prepared_stmt);
 
 /**
-  Set the statement text for a prepared statement event.
+  Set the statement text for a prepared statment event.
   @param prepared_stmt prepared statement.
   @param text the prepared statement text
   @param text_len the prepared statement text length
@@ -2544,8 +2530,6 @@ struct PSI_v1
   set_thread_os_id_v1_t set_thread_os_id;
   /** @sa get_thread_v1_t. */
   get_thread_v1_t get_thread;
-  /** @sa get_thread_name_v1_t. */
-  get_thread_class_name_v1_t get_thread_class_name;
   /** @sa set_thread_user_v1_t. */
   set_thread_user_v1_t set_thread_user;
   /** @sa set_thread_account_v1_t. */
@@ -2753,8 +2737,6 @@ struct PSI_v1
 
   start_metadata_wait_v1_t start_metadata_wait;
   end_metadata_wait_v1_t end_metadata_wait;
-
-  set_thread_peer_port_v1_t set_thread_peer_port;
 };
 
 /** @} (end of group Group_PSI_v1) */

@@ -28,15 +28,11 @@
 #include "my_base.h"                   /* ha_rows, ha_key_alg */
 #include <mysql_com.h>                  /* USERNAME_LENGTH */
 #include "sql_bitmap.h"
-#include "lex_charset.h"
-#include "lex_ident.h"
-#include "sql_basic_types.h"           /* query_id_t */
 
 struct TABLE;
 class Type_handler;
 class Field;
 class Index_statistics;
-struct Lex_ident_cli_st;
 
 class THD;
 
@@ -80,14 +76,14 @@ typedef struct st_key_part_info {	/* Info about a key part */
   uint  offset;                         /* Offset in record (from 0) */
   uint  null_offset;                    /* Offset to null_bit in record */
   /* Length of key part in bytes, excluding NULL flag and length bytes */
-  uint length;
+  uint16 length;
   /* 
     Number of bytes required to store the keypart value. This may be
     different from the "length" field as it also counts
      - possible NULL-flag byte (see HA_KEY_NULL_LENGTH)
      - possible HA_KEY_BLOB_LENGTH bytes needed to store actual value length.
   */
-  uint store_length;
+  uint16 store_length;
   uint16 key_type;
   field_index_t fieldnr;                /* Fieldnr begins counting from 1 */
   uint16 key_part_flag;                 /* 0 or HA_REVERSE_SORT */
@@ -99,22 +95,12 @@ class engine_option_value;
 struct ha_index_option_struct;
 
 typedef struct st_key {
-  ulong flags;                     /* dupp key and pack flags */
-  ulong ext_key_flags;             /* Flags for extended key              */
-  ulong index_flags;               /* Copy of handler->index_flags(index_number, 0, 1) */
-  uint	key_length;		   /* total length of user defined key parts  */
+  uint	key_length;			/* total length of user defined key parts  */
+  ulong flags;                          /* dupp key and pack flags */
   uint	user_defined_key_parts;	   /* How many key_parts */
   uint	usable_key_parts; /* Should normally be = user_defined_key_parts */
-  uint  ext_key_parts;             /* Number of key parts in extended key */
-  uint  block_size;
-  /*
-    The flag is on if statistical data for the index prefixes
-    has to be taken from the system statistical tables.
-  */
-  bool is_statistics_from_stat_tables;
-  bool without_overlaps;
-  bool is_ignored; // TRUE if index needs to be ignored
-
+  uint ext_key_parts;              /* Number of key parts in extended key */
+  ulong ext_key_flags;             /* Flags for extended key              */
   /*
     Parts of primary key that are in the extension of this index. 
 
@@ -135,8 +121,14 @@ typedef struct st_key {
   key_map overlapped;
   /* Set of keys constraint correlated with this key */
   key_map constraint_correlated;
-  Lex_ident_column name;
+  LEX_CSTRING name;
+  uint  block_size;
   enum  ha_key_alg algorithm;
+  /* 
+    The flag is on if statistical data for the index prefixes
+    has to be taken from the system statistical tables.
+  */
+  bool is_statistics_from_stat_tables;
   /*
     Note that parser is used when the table is opened for use, and
     parser_name is used when the table is being created.
@@ -173,7 +165,13 @@ typedef struct st_key {
   engine_option_value *option_list;
   ha_index_option_struct *option_struct;                  /* structure with parsed options */
 
-  double actual_rec_per_key(uint i) const;
+  double actual_rec_per_key(uint i);
+
+  bool without_overlaps;
+  /*
+    TRUE if index needs to be ignored
+  */
+  bool is_ignored;
 } KEY;
 
 
@@ -236,7 +234,7 @@ struct AUTHID
   LEX_CSTRING user, host;
   void init() { memset(this, 0, sizeof(*this)); }
   void copy(MEM_ROOT *root, const LEX_CSTRING *usr, const LEX_CSTRING *host);
-  bool is_role() const { return user.str[0] && (!host.str || !host.str[0]); }
+  bool is_role() const { return user.str[0] && !host.str[0]; }
   void set_lex_string(LEX_CSTRING *l, char *buf)
   {
     if (is_role())
@@ -324,43 +322,11 @@ typedef struct  user_conn {
   uint conn_per_hour, updates, questions;
   /* Maximum amount of resources which account is allowed to consume. */
   USER_RESOURCES user_resources;
-
-  /*
-    The CHARSET_INFO used for hashes to compare the entire 'user\0hash' key.
-    Eventually we should fix it as follows:
-    - the user part should be hashed and compared case sensitively,
-    - the host part should be hashed and compared case insensitively.
-  */
-  static CHARSET_INFO *user_host_key_charset_info_for_hash()
-  {
-    return &my_charset_utf8mb3_general1400_as_ci;
-  }
 } USER_CONN;
-
-
-/* Statistics used by user_stats */
-
-struct rows_stats
-{
-  ha_rows key_read_hit;
-  ha_rows key_read_miss;
-  ha_rows read;
-  ha_rows tmp_read;
-  ha_rows updated;
-  ha_rows inserted;
-  ha_rows deleted;
-  ha_rows pages_accessed;
-  ha_rows pages_read_count;                     // Read from disk
-};
-
 
 typedef struct st_user_stats
 {
   char user[MY_MAX(USERNAME_LENGTH, LIST_PROCESS_HOST_LEN) + 1];
-  static CHARSET_INFO *user_key_charset_info_for_hash()
-  {
-    return &my_charset_utf8mb3_general1400_as_ci;
-  }
   // Account name the user is mapped to when this is a user from mapped_user.
   // Otherwise, the same value as user.
   char priv_user[MY_MAX(USERNAME_LENGTH, LIST_PROCESS_HOST_LEN) + 1];
@@ -369,8 +335,8 @@ typedef struct st_user_stats
   uint total_ssl_connections;
   uint concurrent_connections;
   time_t connected_time;  // in seconds
-  struct rows_stats rows_stats;
-  ha_rows rows_sent;
+  ha_rows rows_read, rows_sent;
+  ha_rows rows_updated, rows_deleted, rows_inserted;
   ulonglong bytes_received;
   ulonglong bytes_sent;
   ulonglong binlog_bytes_written;
@@ -383,17 +349,15 @@ typedef struct st_user_stats
   double cpu_time;        // in seconds
 } USER_STATS;
 
-
 typedef struct st_table_stats
 {
   char table[NAME_LEN * 2 + 2];  // [db] + '\0' + [table] + '\0'
   size_t table_name_length;
-  struct rows_stats rows_stats;
+  ulonglong rows_read, rows_changed;
   ulonglong rows_changed_x_indexes;
   /* Stores enum db_type, but forward declarations cannot be done */
   int engine_type;
 } TABLE_STATS;
-
 
 typedef struct st_index_stats
 {
@@ -401,8 +365,6 @@ typedef struct st_index_stats
   char index[NAME_LEN * 3 + 3];
   size_t index_name_length;                       /* Length of 'index' */
   ulonglong rows_read;
-  ulonglong queries;
-  query_id_t query_id;
 } INDEX_STATS;
 
 
@@ -576,8 +538,7 @@ public:
     OPT_OR_REPLACE_SLAVE_GENERATED= 32,// REPLACE was added on slave, it was
                                        // not in the original query on master.
     OPT_IF_EXISTS= 64,
-    OPT_CREATE_SELECT= 128,             // CREATE ... SELECT
-    OPT_IMPORT_TABLESPACE= 256      // ALTER ... IMPORT TABLESPACE
+    OPT_CREATE_SELECT= 128             // CREATE ... SELECT
   };
 
 private:
@@ -606,7 +567,6 @@ public:
   bool like() const { return m_options & OPT_LIKE; }
   bool if_exists() const { return m_options & OPT_IF_EXISTS; }
   bool is_create_select() const { return m_options & OPT_CREATE_SELECT; }
-  bool import_tablespace() const { return m_options & OPT_IMPORT_TABLESPACE; }
 
   void add(const DDL_options_st::Options other)
   {
@@ -641,84 +601,17 @@ public:
 
 struct Lex_length_and_dec_st
 {
-protected:
-  uint32 m_length;
-  uint8  m_dec;
-  uint8  m_collation_type:LEX_CHARSET_COLLATION_TYPE_BITS;
-  bool   m_has_explicit_length:1;
-  bool   m_has_explicit_dec:1;
-  bool   m_length_overflowed:1;
-  bool   m_dec_overflowed:1;
-
-  static_assert(LEX_CHARSET_COLLATION_TYPE_BITS <= 8,
-                "Lex_length_and_dec_st::m_collation_type bits check");
-
+private:
+  const char *m_length;
+  const char *m_dec;
 public:
-  void reset()
-  {
-    m_length= 0;
-    m_dec= 0;
-    m_collation_type= 0;
-    m_has_explicit_length= false;
-    m_has_explicit_dec= false;
-    m_length_overflowed= false;
-    m_dec_overflowed= false;
-  }
-  void set_length_only(uint32 length)
-  {
-    m_length= length;
-    m_dec= 0;
-    m_collation_type= 0;
-    m_has_explicit_length= true;
-    m_has_explicit_dec= false;
-    m_length_overflowed= false;
-    m_dec_overflowed= false;
-  }
-  void set_dec_only(uint8 dec)
-  {
-    m_length= 0;
-    m_dec= dec;
-    m_collation_type= 0;
-    m_has_explicit_length= false;
-    m_has_explicit_dec= true;
-    m_length_overflowed= false;
-    m_dec_overflowed= false;
-  }
-  void set_length_and_dec(uint32 length, uint8 dec)
+  void set(const char *length, const char *dec)
   {
     m_length= length;
     m_dec= dec;
-    m_collation_type= 0;
-    m_has_explicit_length= true;
-    m_has_explicit_dec= true;
-    m_length_overflowed= false;
-    m_dec_overflowed= false;
   }
-  void set(const char *length, const char *dec);
-  uint32 length() const
-  {
-    return m_length;
-  }
-  uint8 dec() const
-  {
-    return m_dec;
-  }
-  bool has_explicit_length() const
-  {
-    return m_has_explicit_length;
-  }
-  bool has_explicit_dec() const
-  {
-    return m_has_explicit_dec;
-  }
-  bool length_overflowed()  const
-  {
-    return m_length_overflowed;
-  }
-  bool dec_overflowed()  const
-  {
-    return m_dec_overflowed;
-  }
+  const char *length() const { return m_length; }
+  const char *dec() const { return m_dec; }
 };
 
 
@@ -726,64 +619,32 @@ struct Lex_field_type_st: public Lex_length_and_dec_st
 {
 private:
   const Type_handler *m_handler;
-  CHARSET_INFO *m_ci;
+  void set(const Type_handler *handler, const char *length, const char *dec)
+  {
+    m_handler= handler;
+    Lex_length_and_dec_st::set(length, dec);
+  }
 public:
-  void set(const Type_handler *handler,
-           Lex_length_and_dec_st length_and_dec,
-           CHARSET_INFO *cs= NULL)
+  void set(const Type_handler *handler, Lex_length_and_dec_st length_and_dec)
   {
     m_handler= handler;
-    m_ci= cs;
     Lex_length_and_dec_st::operator=(length_and_dec);
   }
-  void set(const Type_handler *handler,
-           const Lex_length_and_dec_st &length_and_dec,
-           const Lex_column_charset_collation_attrs_st &coll)
-  {
-    m_handler= handler;
-    m_ci= coll.charset_info();
-    Lex_length_and_dec_st::operator=(length_and_dec);
-    // Using bit-and to avoid the warning:
-    // conversion from ‘uint8’ to ‘unsigned char:3’ may change value
-    m_collation_type= ((uint8) coll.type()) & LEX_CHARSET_COLLATION_TYPE_MASK;
-  }
-  void set(const Type_handler *handler,
-           const Lex_column_charset_collation_attrs_st &coll)
-  {
-    m_handler= handler;
-    m_ci= coll.charset_info();
-    Lex_length_and_dec_st::reset();
-    // Using bit-and to avoid the warning:
-    // conversion from ‘uint8’ to ‘unsigned char:3’ may change value
-    m_collation_type= ((uint8) coll.type()) & LEX_CHARSET_COLLATION_TYPE_MASK;
-  }
-  void set(const Type_handler *handler, CHARSET_INFO *cs= NULL)
-  {
-    m_handler= handler;
-    m_ci= cs;
-    Lex_length_and_dec_st::reset();
-  }
-  void set_handler_length_flags(const Type_handler *handler,
-                                const Lex_length_and_dec_st &length,
+  void set_handler_length_flags(const Type_handler *handler, const char *length,
                                 uint32 flags);
-  void set_handler_length(const Type_handler *handler, uint32 length)
+  void set(const Type_handler *handler, const char *length)
   {
-    m_handler= handler;
-    m_ci= NULL;
-    Lex_length_and_dec_st::set_length_only(length);
+    set(handler, length, 0);
+  }
+  void set(const Type_handler *handler)
+  {
+    set(handler, 0, 0);
   }
   void set_handler(const Type_handler *handler)
   {
     m_handler= handler;
   }
   const Type_handler *type_handler() const { return m_handler; }
-  CHARSET_INFO *charset_collation() const { return m_ci; }
-  Lex_column_charset_collation_attrs charset_collation_attrs() const
-  {
-    return Lex_column_charset_collation_attrs(m_ci,
-                                 (Lex_column_charset_collation_attrs_st::Type)
-                                 m_collation_type);
-  }
 };
 
 
@@ -791,41 +652,26 @@ struct Lex_dyncol_type_st: public Lex_length_and_dec_st
 {
 private:
   int m_type; // enum_dynamic_column_type is not visible here, so use int
-  CHARSET_INFO *m_ci;
 public:
-  void set(int type, Lex_length_and_dec_st length_and_dec,
-           CHARSET_INFO *cs= NULL)
+  void set(int type, const char *length, const char *dec)
   {
     m_type= type;
-    m_ci= cs;
+    Lex_length_and_dec_st::set(length, dec);
+  }
+  void set(int type, Lex_length_and_dec_st length_and_dec)
+  {
+    m_type= type;
     Lex_length_and_dec_st::operator=(length_and_dec);
+  }
+  void set(int type, const char *length)
+  {
+    set(type, length, 0);
   }
   void set(int type)
   {
-    m_type= type;
-    m_ci= NULL;
-    Lex_length_and_dec_st::reset();
-  }
-  void set(int type, CHARSET_INFO *cs)
-  {
-    m_type= type;
-    m_ci= cs;
-    Lex_length_and_dec_st::reset();
-  }
-  bool set(int type,
-           Sql_used *used,
-           const Charset_collation_map_st &map,
-           const Lex_column_charset_collation_attrs_st &collation,
-           CHARSET_INFO *charset)
-  {
-    CHARSET_INFO *tmp= collation.resolved_to_character_set(used, map, charset);
-    if (!tmp)
-      return true;
-    set(type, tmp);
-    return false;
+    set(type, 0, 0);
   }
   int dyncol_type() const { return m_type; }
-  CHARSET_INFO *charset_collation() const { return m_ci; }
 };
 
 
@@ -912,9 +758,12 @@ public:
   {
     m_index= 0;
     m_target_bound= 0;
-    m_cursor_offset= 0;
     m_direction= 0;
     m_implicit_cursor= false;
+  }
+  void init(const Lex_for_loop_st &other)
+  {
+    *this= other;
   }
   bool is_for_loop_cursor() const { return m_target_bound == NULL; }
   bool is_for_loop_explicit_cursor() const
@@ -944,6 +793,7 @@ public:
   }
   Item *make_item_func_trim_std(THD *thd) const;
   Item *make_item_func_trim_oracle(THD *thd) const;
+  Item *make_item_func_trim(THD *thd) const;
 };
 
 
@@ -951,25 +801,6 @@ class Lex_trim: public Lex_trim_st
 {
 public:
   Lex_trim(trim_spec spec, Item *source) { set(spec, source); }
-};
-
-
-class Lex_substring_spec_st
-{
-public:
-  Item *m_subject;
-  Item *m_from;
-  Item *m_for;
-  static Lex_substring_spec_st init(Item *subject,
-                                    Item *from,
-                                    Item *xfor= NULL)
-  {
-    Lex_substring_spec_st res;
-    res.m_subject= subject;
-    res.m_from= from;
-    res.m_for= xfor;
-    return res;
-  }
 };
 
 
@@ -1040,7 +871,7 @@ public:
 class Load_data_outvar
 {
 public:
-  virtual ~Load_data_outvar() = default;
+  virtual ~Load_data_outvar() {}
   virtual bool load_data_set_null(THD *thd, const Load_data_param *param)= 0;
   virtual bool load_data_set_value(THD *thd, const char *pos, uint length,
                                    const Load_data_param *param)= 0;
@@ -1051,81 +882,26 @@ public:
 };
 
 
-class Timeval: public my_timeval
+class Timeval: public timeval
 {
 protected:
-  Timeval() = default;
+  Timeval() { }
 public:
   Timeval(my_time_t sec, ulong usec)
   {
-    tv_sec= (longlong) sec;
+    tv_sec= sec;
     /*
       Since tv_usec is not always of type ulong, cast usec parameter
       explicitly to uint to avoid compiler warnings about losing
       integer precision.
     */
     DBUG_ASSERT(usec < 1000000);
-    tv_usec= usec;
+    tv_usec= (uint)usec;
   }
-  explicit Timeval(const my_timeval &tv)
-    :my_timeval(tv)
-  {}
+  explicit Timeval(const timeval &tv)
+   :timeval(tv)
+  { }
 };
 
-static inline void my_timeval_trunc(struct my_timeval *tv, uint decimals)
-{
-  tv->tv_usec-= (suseconds_t) my_time_fraction_remainder(tv->tv_usec, decimals);
-}
-
-
-/*
-  A value that's either a Timeval or SQL NULL
-*/
-
-class Timeval_null: protected Timeval
-{
-  bool m_is_null;
-public:
-  Timeval_null()
-   :Timeval(0, 0),
-    m_is_null(true)
-  { }
-  Timeval_null(const my_time_t sec, ulong usec)
-   :Timeval(sec, usec),
-    m_is_null(false)
-  { }
-  const Timeval & to_timeval() const
-  {
-    DBUG_ASSERT(!m_is_null);
-    return *this;
-  }
-  bool is_null() const { return m_is_null; }
-};
-
-
-/*
-  A run-time address of an SP variable. Consists of:
-  - The rcontext type (LOCAL, PACKAGE BODY),
-    controlled by m_rcontext_handler
-  - The frame offset
-*/
-class sp_rcontext_addr
-{
-public:
-  sp_rcontext_addr(const class Sp_rcontext_handler *h, uint offset)
-   :m_rcontext_handler(h), m_offset(offset)
-  { }
-  const Sp_rcontext_handler *rcontext_handler() const
-  {
-    return m_rcontext_handler;
-  }
-  uint offset() const
-  {
-    return m_offset;
-  }
-protected:
-  const class Sp_rcontext_handler *m_rcontext_handler;
-  uint m_offset;               ///< Frame offset
-};
 
 #endif /* STRUCTS_INCLUDED */

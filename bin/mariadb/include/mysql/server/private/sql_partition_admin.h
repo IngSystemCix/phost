@@ -32,12 +32,12 @@ public:
   {}
 
   /* Override SQLCOM_*, since it is an ALTER command */
-  virtual enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 };
 
 
@@ -127,9 +127,10 @@ public:
     : Sql_cmd_common_alter_table()
   {}
 
-  ~Sql_cmd_alter_table_exchange_partition() = default;
+  ~Sql_cmd_alter_table_exchange_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
 private:
   bool exchange_partition(THD *thd, TABLE_LIST *, Alter_info *);
@@ -149,12 +150,13 @@ public:
     : Sql_cmd_analyze_table()
   {}
 
-  ~Sql_cmd_alter_table_analyze_partition() = default;
+  ~Sql_cmd_alter_table_analyze_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
   /* Override SQLCOM_ANALYZE, since it is an ALTER command */
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
@@ -174,12 +176,13 @@ public:
     : Sql_cmd_check_table()
   {}
 
-  ~Sql_cmd_alter_table_check_partition() = default;
+  ~Sql_cmd_alter_table_check_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
   /* Override SQLCOM_CHECK, since it is an ALTER command */
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
@@ -199,12 +202,13 @@ public:
     : Sql_cmd_optimize_table()
   {}
 
-  ~Sql_cmd_alter_table_optimize_partition() = default;
+  ~Sql_cmd_alter_table_optimize_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
   /* Override SQLCOM_OPTIMIZE, since it is an ALTER command */
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
@@ -224,12 +228,13 @@ public:
     : Sql_cmd_repair_table()
   {}
 
-  ~Sql_cmd_alter_table_repair_partition() = default;
+  ~Sql_cmd_alter_table_repair_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
   /* Override SQLCOM_REPAIR, since it is an ALTER command */
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
@@ -245,14 +250,16 @@ public:
   /**
     Constructor, used to represent a ALTER TABLE TRUNCATE PARTITION statement.
   */
-  Sql_cmd_alter_table_truncate_partition() = default;
+  Sql_cmd_alter_table_truncate_partition()
+  {}
 
-  virtual ~Sql_cmd_alter_table_truncate_partition() = default;
+  virtual ~Sql_cmd_alter_table_truncate_partition()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
   /* Override SQLCOM_TRUNCATE, since it is an ALTER command */
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }

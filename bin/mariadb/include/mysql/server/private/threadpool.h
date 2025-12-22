@@ -102,7 +102,8 @@ struct TP_connection
     priority(TP_PRIORITY_HIGH)
   {}
 
-  virtual ~TP_connection() = default;
+  virtual ~TP_connection()
+  {};
 
   /* Initialize io structures windows threadpool, epoll etc */
   virtual int init() = 0;
@@ -120,7 +121,7 @@ struct TP_connection
 
 struct TP_pool
 {
-  virtual ~TP_pool() = default;
+  virtual ~TP_pool(){};
   virtual int init()= 0;
   virtual TP_connection *new_connection(CONNECT *)= 0;
   virtual void add(TP_connection *c)= 0;
@@ -140,13 +141,13 @@ struct TP_pool
 struct TP_pool_win:TP_pool
 {
   TP_pool_win();
-  int init() override;
-  ~TP_pool_win() override;
-  TP_connection *new_connection(CONNECT *c) override;
-  void add(TP_connection *) override;
-  int set_max_threads(uint) override;
-  int set_min_threads(uint) override;
-  void resume(TP_connection *c) override;
+  virtual int init();
+  virtual ~TP_pool_win();
+  virtual TP_connection *new_connection(CONNECT *c);
+  virtual void add(TP_connection *);
+  virtual int set_max_threads(uint);
+  virtual int set_min_threads(uint);
+  void resume(TP_connection *c);
 };
 #endif
 
@@ -154,13 +155,13 @@ struct TP_pool_generic :TP_pool
 {
   TP_pool_generic();
   ~TP_pool_generic();
-  int init() override;
-  TP_connection *new_connection(CONNECT *c) override;
-  void add(TP_connection *) override;
-  int set_pool_size(uint) override;
-  int set_stall_limit(uint) override;
-  int get_idle_thread_count() override;
-  void resume(TP_connection* c) override;
+  virtual int init();
+  virtual TP_connection *new_connection(CONNECT *c);
+  virtual void add(TP_connection *);
+  virtual int set_pool_size(uint);
+  virtual int set_stall_limit(uint);
+  virtual int get_idle_thread_count();
+  void resume(TP_connection* c);
 };
 
 #endif /* HAVE_POOL_OF_THREADS */

@@ -19,6 +19,10 @@
 
 /* When using sql procedures */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface				/* gcc class implementation */
+#endif
+
 /*
   It is necessary to include set_var.h instead of item.h because there
   are dependencies on include order for set_var.h and item.h. This
@@ -66,7 +70,7 @@ public:
   {
     return type_handler()->Item_get_date_with_warn(thd, this, ltime, fuzzydate);
   }
-  Item* do_get_copy(THD *thd) const override { return 0; }
+  Item* get_copy(THD *thd) override { return 0; }
 };
 
 class Item_proc_real :public Item_proc
@@ -121,8 +125,6 @@ public:
   { s->set(value, default_charset()); return s; }
   my_decimal *val_decimal(my_decimal *) override;
   unsigned int size_of() { return sizeof(*this);}
-  Item *do_get_copy(THD *thd) const override { return nullptr; }
-  Item *do_build_clone(THD *thd) const override { return nullptr; }
 };
 
 
@@ -163,8 +165,6 @@ public:
   my_decimal *val_decimal(my_decimal *) override;
   void cleanup() override { value.free(); }
   unsigned int size_of() { return sizeof(*this);}  
-  Item *do_get_copy(THD *thd) const override { return nullptr; }
-  Item *do_build_clone(THD *thd) const override { return nullptr; }
 };
 
 /* The procedure class definitions */

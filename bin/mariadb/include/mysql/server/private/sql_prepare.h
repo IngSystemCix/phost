@@ -65,19 +65,8 @@ public:
   bool report_error(THD *thd);
   bool is_invalidated() const { return m_invalidated; }
   void reset_reprepare_observer() { m_invalidated= FALSE; }
-
-  bool can_retry() const
-  {
-    // The method must be called only for a statement that is invalidated
-    assert(is_invalidated());
-    return m_attempt <= MAX_REPREPARE_ATTEMPTS;
-  }
-
 private:
-  bool m_invalidated{false};
-  int m_attempt{0};
-
-  static const int MAX_REPREPARE_ATTEMPTS= 3;
+  bool m_invalidated;
 };
 
 
@@ -126,7 +115,7 @@ class Ed_row;
   automatic type conversion.
 */
 
-class Ed_result_set
+class Ed_result_set: public Sql_alloc
 {
 public:
   operator List<Ed_row>&() { return *m_rows; }
@@ -136,12 +125,10 @@ public:
                 MEM_ROOT *mem_root_arg);
 
   /** We don't call member destructors, they all are POD types. */
-  ~Ed_result_set() = default;
+  ~Ed_result_set() {}
 
   size_t get_field_count() const { return m_column_count; }
 
-  static void *operator new(size_t size, MEM_ROOT *mem_root)
-  { return alloc_root(mem_root, size); }
   static void operator delete(void *ptr, size_t size) throw ();
   static void operator delete(void *, MEM_ROOT *){}
 private:
@@ -363,7 +350,5 @@ private:
   Ed_column *m_column_array;
   size_t m_column_count; /* TODO: change to point to metadata */
 };
-
-extern Atomic_counter<uint32_t> local_connection_thread_count;
 
 #endif // SQL_PREPARE_H

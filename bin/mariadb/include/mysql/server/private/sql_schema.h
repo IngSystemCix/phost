@@ -19,52 +19,20 @@
 #include "mysqld.h"
 #include "lex_string.h"
 
-class Lex_ident_sys;
-class Create_func;
-
 class Schema
 {
-  const Lex_ident_db m_name;
+  LEX_CSTRING m_name;
 public:
   Schema(const LEX_CSTRING &name)
    :m_name(name)
   { }
-  virtual ~Schema() = default;
-  const Lex_ident_db &name() const { return m_name; }
+  virtual ~Schema() { }
+  const LEX_CSTRING &name() const { return m_name; }
   virtual const Type_handler *map_data_type(THD *thd, const Type_handler *src)
                                             const
   {
     return src;
   }
-
-  /**
-    Find a native function builder, return an error if not found,
-    build an Item otherwise.
-  */
-  Item *make_item_func_call_native(THD *thd,
-                                   const Lex_ident_routine &name,
-                                   List<Item> *args) const;
-
-  /**
-    Find the native function builder associated with a given function name.
-    @param thd The current thread
-    @param name The native function name
-    @return The native function builder associated with the name, or NULL
-  */
-  virtual Create_func *find_native_function_builder(THD *thd,
-                                                    const LEX_CSTRING &name)
-                                                    const;
-
-  // Builders for native SQL function with a special syntax in sql_yacc.yy
-  virtual Item *make_item_func_replace(THD *thd,
-                                       Item *subj,
-                                       Item *find,
-                                       Item *replace) const;
-  virtual Item *make_item_func_substr(THD *thd,
-                                      const Lex_substring_spec_st &spec) const;
-
-  virtual Item *make_item_func_trim(THD *thd, const Lex_trim_st &spec) const;
-
   /*
     For now we have *hard-coded* compatibility schemas:
       schema_mariadb, schema_oracle, schema_maxdb.
@@ -79,7 +47,8 @@ public:
   */
   bool eq_name(const LEX_CSTRING &name) const
   {
-    return m_name.streq(name);
+    return !table_alias_charset->strnncoll(m_name.str, m_name.length,
+                                           name.str, name.length);
   }
   static Schema *find_by_name(const LEX_CSTRING &name);
   static Schema *find_implied(THD *thd);
@@ -87,6 +56,5 @@ public:
 
 
 extern Schema mariadb_schema;
-extern const Schema &oracle_schema_ref;
 
 #endif // SQL_SCHEMA_H_INCLUDED

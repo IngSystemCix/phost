@@ -41,7 +41,6 @@ extern "C" {
 #include <mysql/service_thd_wait.h>
 #include <mysql/service_json.h>
 /*#include <mysql/service_wsrep.h>*/
-#include <mysql/service_sql.h>
 
 #ifdef __cplusplus
 }

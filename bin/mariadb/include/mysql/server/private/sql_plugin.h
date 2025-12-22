@@ -23,11 +23,10 @@
 */
 #define SHOW_always_last SHOW_KEY_CACHE_LONG, \
             SHOW_HAVE, SHOW_MY_BOOL, SHOW_HA_ROWS, SHOW_SYS, \
-            SHOW_LONG_NOFLUSH, SHOW_LONGLONG_NOFLUSH, SHOW_LEX_STRING,          \
-            SHOW_ATOMIC_COUNTER_UINT32_T,                                       \
+            SHOW_LONG_NOFLUSH, SHOW_LEX_STRING, SHOW_ATOMIC_COUNTER_UINT32_T, \
       /* SHOW_*_STATUS must be at the end, SHOW_LONG_STATUS being first */ \
             SHOW_LONG_STATUS, SHOW_DOUBLE_STATUS, SHOW_LONGLONG_STATUS, \
-            SHOW_UINT32_STATUS, SHOW_MICROSECOND_STATUS,
+            SHOW_UINT32_STATUS
 #include "mariadb.h"
 #undef SHOW_always_last
 
@@ -153,7 +152,7 @@ typedef struct st_plugin_int **plugin_ref;
 #define plugin_equals(p1,p2) ((p1) && (p2) && (p1)[0] == (p2)[0])
 #endif
 
-typedef int (*plugin_type_init)(void *);
+typedef int (*plugin_type_init)(struct st_plugin_int *);
 
 extern I_List<i_string> *opt_plugin_load_list_ptr;
 extern char *opt_plugin_dir_ptr;
@@ -173,7 +172,7 @@ extern plugin_ref plugin_lock(THD *thd, plugin_ref ptr);
 extern plugin_ref plugin_lock_by_name(THD *thd, const LEX_CSTRING *name,
                                       int type);
 extern void plugin_unlock(THD *thd, plugin_ref plugin);
-extern void plugin_unlock_list(THD *thd, plugin_ref *list, size_t count);
+extern void plugin_unlock_list(THD *thd, plugin_ref *list, uint count);
 extern bool mysql_install_plugin(THD *thd, const LEX_CSTRING *name,
                                  const LEX_CSTRING *dl);
 extern bool mysql_uninstall_plugin(THD *thd, const LEX_CSTRING *name,

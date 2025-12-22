@@ -36,8 +36,8 @@ class Expression_cache :public Sql_alloc
 public:
   enum result {ERROR, HIT, MISS};
 
-  Expression_cache()= default;
-  virtual ~Expression_cache() = default;
+  Expression_cache(){};
+  virtual ~Expression_cache() {};
   /**
     Shall check the presence of expression value in the cache for a given
     set of values of the expression parameters.  Return the result of the
@@ -83,11 +83,7 @@ public:
     cache(c), hit(0), miss(0), state(UNINITED)
   {}
 
-private:
-  // This can be NULL if the cache is already deleted
   Expression_cache *cache;
-
-public:
   ulong hit, miss;
   enum expr_cache_state state;
 
@@ -95,7 +91,6 @@ public:
   void set(ulong h, ulong m, enum expr_cache_state s)
   {hit= h; miss= m; state= s;}
 
-  void detach_from_cache() { cache= NULL; }
   void fetch_current_stats()
   {
     if (cache)
@@ -113,19 +108,19 @@ class Expression_cache_tmptable :public Expression_cache
 public:
   Expression_cache_tmptable(THD *thd, List<Item> &dependants, Item *value);
   virtual ~Expression_cache_tmptable();
-  result check_value(Item **value) override;
-  my_bool put_value(Item *value) override;
+  virtual result check_value(Item **value);
+  virtual my_bool put_value(Item *value);
 
-  void print(String *str, enum_query_type query_type) override;
-  bool is_inited() override { return inited; };
-  void init() override;
+  void print(String *str, enum_query_type query_type);
+  bool is_inited() { return inited; };
+  void init();
 
   void set_tracker(Expression_cache_tracker *st)
   {
     tracker= st;
     update_tracker();
   }
-  void update_tracker() override
+  virtual void update_tracker()
   {
     if (tracker)
     {

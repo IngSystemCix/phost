@@ -49,7 +49,6 @@
 #include "rpl_filter.h"
 #include "rpl_tblmap.h"
 #include "rpl_gtid.h"
-#include "log_event.h"
 
 #define SLAVE_NET_TIMEOUT  60
 
@@ -231,8 +230,7 @@ bool show_all_master_info(THD* thd);
 void show_binlog_info_get_fields(THD *thd, List<Item> *field_list);
 bool show_binlog_info(THD* thd);
 bool rpl_master_has_bug(const Relay_log_info *rli, uint bug_id, bool report,
-                        bool (*pred)(const void *), const void *param,
-                        bool maria_master= false);
+                        bool (*pred)(const void *), const void *param);
 bool rpl_master_erroneous_autoinc(THD* thd);
 
 const char *print_slave_db_safe(const char *db);
@@ -279,9 +277,7 @@ void slave_background_kill_request(THD *to_kill);
 void slave_background_gtid_pos_create_request
         (rpl_slave_state::gtid_pos_table *table_entry);
 void slave_background_gtid_pending_delete_request(void);
-void store_master_info(THD *thd, Master_info *mi, TABLE *table,
-                       String *gtid_pos);
-int cmp_mi_by_name(const void *arg1_, const void *arg2_);
+
 extern Master_info *active_mi; /* active_mi for multi-master */
 extern Master_info *default_master_info; /* To replace active_mi */
 extern Master_info_index *master_info_index;
@@ -296,17 +292,6 @@ extern char *master_info_file, *report_user;
 extern char *report_host, *report_password;
 
 extern I_List<THD> threads;
-
-/*
-  Check that a binlog event (read from the relay log) is valid to update
-  last_master_timestamp. That is, a valid event is one with a consistent
-  timestamp which originated from a primary server.
-*/
-static inline bool event_can_update_last_master_timestamp(Log_event *ev)
-{
-  return ev && !(ev->is_artificial_event() || ev->is_relay_log_event() ||
-                 (ev->when == 0));
-}
 
 #else
 #define close_active_mi() /* no-op */

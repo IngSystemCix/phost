@@ -55,8 +55,8 @@ struct File_option
 class Unknown_key_hook
 {
 public:
-  Unknown_key_hook() = default;                       /* Remove gcc warning */
-  virtual ~Unknown_key_hook() = default;              /* Remove gcc warning */
+  Unknown_key_hook() {}                       /* Remove gcc warning */
+  virtual ~Unknown_key_hook() {}              /* Remove gcc warning */
   virtual bool process_unknown_string(const char *&unknown_key, uchar* base,
                                       MEM_ROOT *mem_root, const char *end)= 0;
 };
@@ -67,9 +67,9 @@ public:
 class File_parser_dummy_hook: public Unknown_key_hook
 {
 public:
-  File_parser_dummy_hook() = default;                 /* Remove gcc warning */
-  bool process_unknown_string(const char *&unknown_key, uchar* base,
-                              MEM_ROOT *mem_root, const char *end) override;
+  File_parser_dummy_hook() {}                 /* Remove gcc warning */
+  virtual bool process_unknown_string(const char *&unknown_key, uchar* base,
+                                      MEM_ROOT *mem_root, const char *end);
 };
 
 extern File_parser_dummy_hook file_parser_dummy_hook;

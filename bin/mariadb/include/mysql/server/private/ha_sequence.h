@@ -65,51 +65,46 @@ public:
 
   ha_sequence(handlerton *hton, TABLE_SHARE *share);
   ~ha_sequence();
-  virtual handlerton *storage_ht() const override
-  { return file->ht; }
 
   /* virtual function that are re-implemented for sequence */
-  int open(const char *name, int mode, uint test_if_locked) override;
+  int open(const char *name, int mode, uint test_if_locked);
   int create(const char *name, TABLE *form,
-             HA_CREATE_INFO *create_info) override;
-  handler *clone(const char *name, MEM_ROOT *mem_root) override;
-  int write_row(const uchar *buf) override;
-  Table_flags table_flags() const override;
+             HA_CREATE_INFO *create_info);
+  handler *clone(const char *name, MEM_ROOT *mem_root);
+  int write_row(const uchar *buf);
+  Table_flags table_flags() const;
   /* One can't update or delete from sequence engine */
-  int update_row(const uchar *old_data, const uchar *new_data) override
+  int update_row(const uchar *old_data, const uchar *new_data)
   { return HA_ERR_WRONG_COMMAND; }
-  int delete_row(const uchar *buf) override
+  int delete_row(const uchar *buf)
   { return HA_ERR_WRONG_COMMAND; }
   /* One can't delete from sequence engine */
-  int truncate() override
+  int truncate()
   { return HA_ERR_WRONG_COMMAND; }
   /* Can't use query cache */
-  uint8 table_cache_type() override
+  uint8 table_cache_type()
   { return HA_CACHE_TBL_NOCACHE; }
-  void print_error(int error, myf errflag) override;
-  int info(uint) override;
-  LEX_CSTRING *engine_name() override { return hton_name(file->ht); }
-  int external_lock(THD *thd, int lock_type) override;
-  int extra(enum ha_extra_function operation) override;
+  void print_error(int error, myf errflag);
+  int info(uint);
+  LEX_CSTRING *engine_name() { return hton_name(file->ht); }
+  int external_lock(THD *thd, int lock_type);
+  int extra(enum ha_extra_function operation);
   /* For ALTER ONLINE TABLE */
   bool check_if_incompatible_data(HA_CREATE_INFO *create_info,
-                                  uint table_changes) override;
-  enum_alter_inplace_result
-  check_if_supported_inplace_alter(TABLE *altered_table,
-                                   Alter_inplace_info *ai) override;
+                                  uint table_changes);
   void write_lock() { write_locked= 1;}
   void unlock() { write_locked= 0; }
   bool is_locked() { return write_locked; }
 
   /* Functions that are directly mapped to the underlying handler */
-  int rnd_init(bool scan) override
+  int rnd_init(bool scan)
   { return file->rnd_init(scan); }
   /*
     We need to have a lock here to protect engines like MyISAM from
     simultaneous read and write. For sequence's this is not critical
     as this function is used extremely seldom.
   */
-  int rnd_next(uchar *buf) override
+  int rnd_next(uchar *buf)
   {
     int error;
     table->s->sequence->read_lock(table);
@@ -117,9 +112,9 @@ public:
     table->s->sequence->read_unlock(table);
     return error;
   }
-  int rnd_end() override
+  int rnd_end()
   { return file->rnd_end(); }
-  int rnd_pos(uchar *buf, uchar *pos) override
+  int rnd_pos(uchar *buf, uchar *pos)
   {
     int error;
     table->s->sequence->read_lock(table);
@@ -127,37 +122,37 @@ public:
     table->s->sequence->read_unlock(table);
     return error;
   }
-  void position(const uchar *record) override
+  void position(const uchar *record)
   { return file->position(record); }
-  const char *table_type() const override
+  const char *table_type() const
   { return file->table_type(); }
-  ulong index_flags(uint inx, uint part, bool all_parts) const override
+  ulong index_flags(uint inx, uint part, bool all_parts) const
   { return file->index_flags(inx, part, all_parts); }
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,
-                             enum thr_lock_type lock_type) override
+                             enum thr_lock_type lock_type)
   { return file->store_lock(thd, to, lock_type); }
-  int close(void) override
+  int close(void)
   { return file->close(); }
   const char **bas_ext() const
   { return file->bas_ext(); }
-  int delete_table(const char*name) override
+  int delete_table(const char*name)
   { return file->delete_table(name); }
-  int rename_table(const char *from, const char *to) override
+  int rename_table(const char *from, const char *to)
   { return file->rename_table(from, to); }
-  void unbind_psi() override
+  void unbind_psi()
   { file->unbind_psi(); }
-  void rebind_psi() override
+  void rebind_psi()
   { file->rebind_psi(); }
-  int discard_or_import_tablespace(my_bool discard) override;
-  bool auto_repair(int error) const override
+
+  bool auto_repair(int error) const
   { return file->auto_repair(error); }
-  int repair(THD* thd, HA_CHECK_OPT* check_opt) override
+  int repair(THD* thd, HA_CHECK_OPT* check_opt)
   { return file->repair(thd, check_opt); }
-  bool check_and_repair(THD *thd) override
+  bool check_and_repair(THD *thd)
   { return file->check_and_repair(thd); }
-  bool is_crashed() const override
+  bool is_crashed() const
   { return file->is_crashed(); }
-  void column_bitmaps_signal() override
+  void column_bitmaps_signal()
   { return file->column_bitmaps_signal(); }
 
   /* New methods */

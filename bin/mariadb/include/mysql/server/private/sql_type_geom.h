@@ -2,7 +2,7 @@
 #define SQL_TYPE_GEOM_H_INCLUDED
 /*
    Copyright (c) 2015 MariaDB Foundation
-   Copyright (c) 2019, 2022, MariaDB Corporation.
+   Copyright (c) 2019 MariaDB
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,42 +17,14 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111-1301 USA */
 
+#ifdef USE_PRAGMA_IMPLEMENTATION
+#pragma implementation				// gcc: Class implementation
+#endif
+
 #include "mariadb.h"
 #include "sql_type.h"
 
-class Type_geom_attributes
-{
-protected:
-  uint32 m_srid;
-public:
-  Type_geom_attributes()
-   :m_srid(0)
-  { }
-  explicit Type_geom_attributes(const Type_extra_attributes &eattr)
-   :m_srid(eattr.get_attr_uint32(0))
-  { }
-  explicit Type_geom_attributes(uint32 srid)
-   :m_srid(srid)
-  { }
-  void store(Type_extra_attributes *to) const
-  {
-    to->set_attr_uint32(0, m_srid);
-  }
-  void set_srid(uint32 srid)
-  {
-    m_srid= srid;
-  }
-  uint32 get_srid() const
-  {
-    return m_srid;
-  }
-  bool join(const Type_geom_attributes &rhs)
-  {
-    return m_srid != rhs.m_srid;
-  }
-};
-
-
+#ifdef HAVE_SPATIAL
 class Type_handler_geometry: public Type_handler_string_result
 {
 public:
@@ -110,13 +82,6 @@ public:
   Field *make_conversion_table_field(MEM_ROOT *root,
                                      TABLE *table, uint metadata,
                                      const Field *target) const override;
-  Log_event_data_type user_var_log_event_data_type(uint charset_nr)
-                                                              const override
-  {
-    return Log_event_data_type(name().lex_cstring(), result_type(),
-                               charset_nr, false/*unsigned*/);
-  }
-
   uint Column_definition_gis_options_image(uchar *buff,
                                            const Column_definition &def)
                                            const override;
@@ -143,7 +108,8 @@ public:
   bool Column_definition_prepare_stage1(THD *thd,
                                         MEM_ROOT *mem_root,
                                         Column_definition *c,
-                                        column_definition_type_t type,
+                                        handler *file,
+                                        ulonglong table_flags,
                                         const Column_derived_attributes
                                               *derived_attr)
                                         const override;
@@ -331,6 +297,7 @@ class Type_collection_geometry: public Type_collection
 #endif
 public:
   bool init(Type_handler_data *data) override;
+  const Type_handler *handler_by_name(const LEX_CSTRING &name) const override;
   const Type_handler *aggregate_for_result(const Type_handler *a,
                                            const Type_handler *b)
                                            const override;
@@ -349,16 +316,14 @@ public:
 };
 
 extern Type_collection_geometry type_collection_geometry;
-const Type_handler *
-Type_collection_geometry_handler_by_name(const LEX_CSTRING &name);
 
 #include "field.h"
 
-class Field_geom :public Field_blob,
-                  public Type_geom_attributes
+class Field_geom :public Field_blob
 {
   const Type_handler_geometry *m_type_handler;
 public:
+  uint srid;
   uint precision;
   enum storage_type { GEOM_STORAGE_WKB= 0, GEOM_STORAGE_BINARY= 1};
   enum storage_type storage;
@@ -367,12 +332,11 @@ public:
 	     enum utype unireg_check_arg, const LEX_CSTRING *field_name_arg,
 	     TABLE_SHARE *share, uint blob_pack_length,
 	     const Type_handler_geometry *gth,
-	     const Type_geom_attributes &geom_attr)
+	     uint field_srid)
      :Field_blob(ptr_arg, null_ptr_arg, null_bit_arg, unireg_check_arg,
                  field_name_arg, share, blob_pack_length, &my_charset_bin),
-      Type_geom_attributes(geom_attr),
       m_type_handler(gth)
-  { }
+  { srid= field_srid; }
   enum_conv_type rpl_conv_type_from(const Conv_source &source,
                                     const Relay_log_info *rli,
                                     const Conv_param &param) const override;
@@ -391,12 +355,6 @@ public:
   void set_type_handler(const Type_handler_geometry *th)
   {
     m_type_handler= th;
-  }
-  const Type_extra_attributes type_extra_attributes() const override
-  {
-    Type_extra_attributes eattr;
-    Type_geom_attributes::store(&eattr);
-    return eattr;
   }
   enum_field_types type() const override
   {
@@ -418,9 +376,9 @@ public:
     if (tmp.length)
       to->set_data_type_name(tmp);
   }
-  Data_type_compatibility can_optimize_range(const Item_bool_func *cond,
-                                             const Item *item,
-                                             bool is_eq_func) const override;
+  bool can_optimize_range(const Item_bool_func *cond,
+                                  const Item *item,
+                                  bool is_eq_func) const override;
   void sql_type(String &str) const override;
   Copy_func *get_copy_func(const Field *from) const override
   {
@@ -439,6 +397,12 @@ public:
            !table->copy_blobs;
   }
   bool is_equal(const Column_definition &new_field) const override;
+  bool can_be_converted_by_engine(const Column_definition &new_type)
+                                  const override
+  {
+    return false; // Override the Field_blob behavior
+  }
+
   int  store(const char *to, size_t length, CHARSET_INFO *charset) override;
   int  store(double nr) override;
   int  store(longlong nr, bool unsigned_val) override;
@@ -463,11 +427,14 @@ public:
   bool load_data_set_null(THD *thd) override;
   bool load_data_set_no_data(THD *thd, bool fixed_format) override;
 
+  uint get_srid() const { return srid; }
   void print_key_value(String *out, uint32 length) override
   {
     out->append(STRING_WITH_LEN("unprintable_geometry_value"));
   }
   Binlog_type_info binlog_type_info() const override;
 };
+
+#endif // HAVE_SPATIAL
 
 #endif // SQL_TYPE_GEOM_H_INCLUDED

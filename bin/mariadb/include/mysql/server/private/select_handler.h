@@ -20,12 +20,6 @@
 #include "mariadb.h"
 #include "sql_priv.h"
 
-enum class select_pushdown_type {
-  SINGLE_SELECT,
-  PART_OF_UNIT,
-  WHOLE_UNIT
-};
-
 /**
   @class select_handler
 
@@ -36,38 +30,10 @@ enum class select_pushdown_type {
 class select_handler
 {
  public:
-   // Constructor for a single SELECT_LEX (not a part of a unit)
-  select_handler(THD *thd_arg, handlerton *ht_arg, SELECT_LEX *sel_lex);
+  THD *thd;
+  handlerton *ht;
 
-  // Constructor for a unit (UNION/EXCEPT/INTERSECT)
-  select_handler(THD *thd_arg, handlerton *ht_arg, SELECT_LEX_UNIT *sel_unit);
-
-  /*
-    Constructor for a SELECT_LEX which is a part of a unit
-    (partial pushdown). Both SELECT_LEX and SELECT_LEX_UNIT are passed
-  */
-  select_handler(THD *thd_arg, handlerton *ht_arg, SELECT_LEX *sel_lex,
-                 SELECT_LEX_UNIT *sel_unit);
-
-  virtual ~select_handler();
-
-  int execute();
-
-  virtual bool prepare();
-
-  /*
-    Select_handler processes these cases:
-    - single SELECT
-    - whole unit (multiple SELECTs combined with UNION/EXCEPT/INTERSECT)
-    - single SELECT that is part of a unit (partial pushdown)
-
-    In the case of single SELECT select_lex is initialized and lex_unit==NULL,
-    in the case of whole UNIT select_lex == NULL and lex_unit is initialized,
-    in the case of partial pushdown both select_lex and lex_unit
-      are initialized
-  */
-  SELECT_LEX *select_lex;      // Single select/part of a unit to be executed
-  SELECT_LEX_UNIT *lex_unit;   // Unit to be executed
+  SELECT_LEX *select;  // Select to be excuted
 
   /*
     Temporary table where all results should be stored in record[0]
@@ -75,9 +41,24 @@ class select_handler
     The table is actually never filled. Only its record buffer is used.
   */
   TABLE *table;
+  List<Item> result_columns;
+
+  bool is_analyze;
+
+  bool send_result_set_metadata();
+  bool send_data();
+
+  select_handler(THD *thd_arg, handlerton *ht_arg);
+
+  virtual ~select_handler();
+
+  int execute();
+
+  virtual bool prepare();
+
+  static TABLE *create_tmp_table(THD *thd, SELECT_LEX *sel);
 
 protected:
-
   /*
     Functions to scan the select result set.
     All these returns 0 if ok, error code in case of error.
@@ -99,21 +80,7 @@ protected:
   /* Report errors */
   virtual void print_error(int error, myf errflag);
 
-  bool send_result_set_metadata();
-  bool send_data();
   bool send_eof();
-
-  TABLE *create_tmp_table(THD *thd);
-
-  select_pushdown_type get_pushdown_type();
-
-  THD *thd;
-  handlerton *ht;
-
-  select_result *result;        // Object receiving the retrieved data
-  List<Item> result_columns;
-
-  bool is_analyze;
 };
 
 #endif /* SELECT_HANDLER_INCLUDED */

@@ -22,6 +22,10 @@
 #ifndef  HASH_FILO_H
 #define  HASH_FILO_H
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class interface */
+#endif
+
 #include "hash.h"        /* my_hash_get_key, my_hash_free_key, HASH */
 #include "m_string.h"    /* bzero */
 #include "mysqld.h"      /* key_hash_filo_lock */
@@ -31,7 +35,7 @@ class hash_filo_element
 private:
   hash_filo_element *next_used,*prev_used;
  public:
-  hash_filo_element() = default;
+  hash_filo_element() {}
   hash_filo_element *next()
   { return next_used; }
   hash_filo_element *prev()

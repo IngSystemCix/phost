@@ -20,12 +20,10 @@
 #ifndef _my_alloc_h
 #define _my_alloc_h
 
-#include "mysql/psi/psi_base.h"
+#include <mysql/psi/psi_memory.h>
 
 #define ALLOC_MAX_BLOCK_TO_DROP			4096
 #define ALLOC_MAX_BLOCK_USAGE_BEFORE_DROP	10
-
-#define ROOT_FLAG_READ_ONLY       4
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,21 +50,12 @@ typedef struct st_mem_root
      first free block in queue test counter (if it exceed 
      MAX_BLOCK_USAGE_BEFORE_DROP block will be dropped in 'used' list)
   */
-  unsigned short first_block_usage;
-  unsigned short flags;
+  unsigned int first_block_usage;
 
   void (*error_handler)(void);
 
-  PSI_memory_key psi_key;
+  PSI_memory_key m_psi_key;
 } MEM_ROOT;
-
-typedef struct st_mem_root_savepoint
-{
-  MEM_ROOT *root;
-  USED_MEM *free;
-  USED_MEM *used;
-  unsigned short first_block_usage;
-} MEM_ROOT_SAVEPOINT;
 
 #ifdef  __cplusplus
 }

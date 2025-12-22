@@ -34,13 +34,15 @@ public:
   /**
     Constructor, used to represent a ANALYZE TABLE statement.
   */
-  Sql_cmd_analyze_table() = default;
+  Sql_cmd_analyze_table()
+  {}
 
-  ~Sql_cmd_analyze_table() = default;
+  ~Sql_cmd_analyze_table()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ANALYZE;
   }
@@ -57,13 +59,15 @@ public:
   /**
     Constructor, used to represent a CHECK TABLE statement.
   */
-  Sql_cmd_check_table() = default;
+  Sql_cmd_check_table()
+  {}
 
-  ~Sql_cmd_check_table() = default;
+  ~Sql_cmd_check_table()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_CHECK;
   }
@@ -79,13 +83,15 @@ public:
   /**
     Constructor, used to represent a OPTIMIZE TABLE statement.
   */
-  Sql_cmd_optimize_table() = default;
+  Sql_cmd_optimize_table()
+  {}
 
-  ~Sql_cmd_optimize_table() = default;
+  ~Sql_cmd_optimize_table()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_OPTIMIZE;
   }
@@ -102,13 +108,15 @@ public:
   /**
     Constructor, used to represent a REPAIR TABLE statement.
   */
-  Sql_cmd_repair_table() = default;
+  Sql_cmd_repair_table()
+  {}
 
-  ~Sql_cmd_repair_table() = default;
+  ~Sql_cmd_repair_table()
+  {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_REPAIR;
   }

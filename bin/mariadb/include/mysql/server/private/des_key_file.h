@@ -16,7 +16,7 @@
 #ifndef DES_KEY_FILE_INCLUDED
 #define DES_KEY_FILE_INCLUDED
 
-#ifdef HAVE_des
+#ifdef HAVE_OPENSSL
 #include <openssl/des.h>
 
 #include "violite.h"                /* DES_cblock, DES_key_schedule */
@@ -35,6 +35,6 @@ extern struct st_des_keyschedule des_keyschedule[10];
 extern uint des_default_key;
 
 bool load_des_key_file(const char *file_name);
-#endif /* HAVE_des */
+#endif /* HAVE_OPENSSL */
 
 #endif /* DES_KEY_FILE_INCLUDED */

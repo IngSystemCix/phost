@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2016, 2022, MariaDB Corporation.
+ Copyright (c) 2016, 2021, MariaDB Corporation.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -19,13 +19,12 @@
 /* OpenSSL version specific definitions */
 #if defined(OPENSSL_VERSION_NUMBER)
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && \
-	!(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x30500000L)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 #define HAVE_OPENSSL11 1
 #define SSL_LIBRARY OpenSSL_version(OPENSSL_VERSION)
 #define ERR_remove_state(X) ERR_clear_error()
-#define EVP_CIPHER_CTX_SIZE 200
-#define EVP_MD_CTX_SIZE 80
+#define EVP_CIPHER_CTX_SIZE 176
+#define EVP_MD_CTX_SIZE 48
 #undef EVP_MD_CTX_init
 #define EVP_MD_CTX_init(X) do { memset((X), 0, EVP_MD_CTX_SIZE); EVP_MD_CTX_reset(X); } while(0)
 #undef EVP_CIPHER_CTX_init
@@ -55,10 +54,6 @@
 #ifdef HAVE_WOLFSSL
 #undef ERR_remove_state
 #define ERR_remove_state(x) do {} while(0)
-#undef SSL_get_cipher
-#define SSL_get_cipher(ssl) (SSL_version(ssl) == TLS1_3_VERSION ? wolfSSL_get_cipher(ssl) : wolfSSL_get_cipher_name(ssl))
-#undef SSL_get_cipher_list
-#define SSL_get_cipher_list(ctx,i) wolfSSL_get_cipher_list(i)
 #elif defined (HAVE_ERR_remove_thread_state)
 #define ERR_remove_state(X) ERR_remove_thread_state(NULL)
 #endif /* HAVE_ERR_remove_thread_state */
@@ -78,10 +73,8 @@
 #define EVP_MD_CTX_SIZE                 sizeof(EVP_MD_CTX)
 #endif
 
-#ifndef DH_set0_pqg
 #define DH_set0_pqg(D,P,Q,G)            ((D)->p= (P), (D)->g= (G))
-#endif
-
+#define EVP_CIPHER_CTX_buf_noconst(ctx) ((ctx)->buf)
 #define EVP_CIPHER_CTX_encrypting(ctx)  ((ctx)->encrypt)
 #define EVP_CIPHER_CTX_SIZE             sizeof(EVP_CIPHER_CTX)
 

@@ -20,6 +20,10 @@
 #ifndef _opt_range_h
 #define _opt_range_h
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class implementation */
+#endif
+
 #include "records.h"                            /* READ_RECORD */
 #include "queues.h"                             /* QUEUE */
 #include "filesort.h"                           /* SORT_INFO */
@@ -35,32 +39,6 @@
 class JOIN;
 class Item_sum;
 
-/*
-  When processing an OR clause with more than MAX_OR_ELEMENTS_FOR_INDEX_MERGE
-  disjuncts (i.e. OR-parts), do not construct index_merge plans from it.
-
-  Some users have OR clauses with extremely large number of disjuncts, like:
-
-      (key1=1 AND key2=10) OR
-      (key1=2 AND key2=20) OR
-      (key1=3 AND key2=30) OR
-      ...
-
-  When processing this, the optimizer would try to build a lot of potential
-  index_merge plans. Hypothetically this could be useful as the cheapest plan
-  could be to pick a specific index for each disjunct and build:
-
-     index_merge(key1 IN (1,3,8,15...), key2 IN (20, 40, 50 ...))
-
-  In practice this causes combinatorial amount of time to be spent in the range
-  analyzer, and most variants will be discarded when the range optimizer tries
-  to avoid this combinatorial explosion (which may or may not work depending on
-  the form of the WHERE clause).
-  In practice, very long ORs are served well enough by just considering range
-  accesses on individual indexes.
-*/
-const int MAX_OR_ELEMENTS_FOR_INDEX_MERGE=100;
-
 struct KEY_PART {
   uint16           key,part;
   /* See KEY_PART_INFO for meaning of the next two: */
@@ -75,33 +53,6 @@ struct KEY_PART {
   Field::imagetype image_type;
 };
 
-
-/**
-  A helper function to invert min flags to max flags for DESC key parts.
-  It changes NEAR_MIN, NO_MIN_RANGE to NEAR_MAX, NO_MAX_RANGE appropriately
-*/
-
-inline uint invert_min_flag(uint min_flag)
-{
-  uint max_flag_out = min_flag & ~(NEAR_MIN | NO_MIN_RANGE);
-  if (min_flag & NEAR_MIN) max_flag_out |= NEAR_MAX;
-  if (min_flag & NO_MIN_RANGE) max_flag_out |= NO_MAX_RANGE;
-  return max_flag_out;
-}
-
-
-/**
-  A helper function to invert max flags to min flags for DESC key parts.
-  It changes NEAR_MAX, NO_MAX_RANGE to NEAR_MIN, NO_MIN_RANGE appropriately
-*/
-
-inline uint invert_max_flag(uint max_flag)
-{
-  uint min_flag_out = max_flag & ~(NEAR_MAX | NO_MAX_RANGE);
-  if (max_flag & NEAR_MAX) min_flag_out |= NEAR_MIN;
-  if (max_flag & NO_MAX_RANGE) min_flag_out |= NO_MIN_RANGE;
-  return min_flag_out;
-}
 
 class RANGE_OPT_PARAM;
 /*
@@ -316,15 +267,12 @@ class RANGE_OPT_PARAM;
     - it is a lot easier to compute than computing the number of ranges,
     - it can be updated incrementally when performing AND/OR operations on
       parts of the graph.
-
-  6. For handling DESC keyparts, See HowRangeOptimizerHandlesDescKeyparts
 */
 
 class SEL_ARG :public Sql_alloc
 {
   static int sel_cmp(Field *field, uchar *a, uchar *b, uint8 a_flag,
                      uint8 b_flag);
-  bool min_max_are_equal() const;
 public:
   uint8 min_flag,max_flag,maybe_flag;
   uint8 part;					// Which key part
@@ -369,24 +317,21 @@ public:
   uint weight;
   enum { MAX_WEIGHT = 32000 };
 
+  void update_weight_locally();
 #ifndef DBUG_OFF
   uint verify_weight();
 #endif
 
   /* See RANGE_OPT_PARAM::alloced_sel_args */
-  enum { DEFAULT_MAX_SEL_ARGS = 16000 };
+  enum { MAX_SEL_ARGS = 16000 };
 
-  SEL_ARG() = default;
+  SEL_ARG() {}
   SEL_ARG(SEL_ARG &);
-  SEL_ARG(Field *, const uchar *, const uchar *);
-  SEL_ARG(Field *field, uint8 part,
-          uchar *min_value, uchar *max_value,
+  SEL_ARG(Field *,const uchar *, const uchar *);
+  SEL_ARG(Field *field, uint8 part, uchar *min_value, uchar *max_value,
 	  uint8 min_flag, uint8 max_flag, uint8 maybe_flag);
-
-  /* This is used to construct degenerate SEL_ARGS like ALWAYS, IMPOSSIBLE, etc */
   SEL_ARG(enum Type type_arg)
-    :min_flag(0),
-     max_part_no(0) /* first key part means 1. 0 mean 'no parts'*/,
+    :min_flag(0), max_part_no(0) /* first key part means 1. 0 mean 'no parts'*/,
      elements(1),use_count(1),left(0),right(0),
      next_key_part(0), color(BLACK), type(type_arg), weight(1)
   {}
@@ -424,7 +369,6 @@ public:
       return false;
     return true;
   }
-  int number_of_eq_groups(uint group_key_parts) const;
   inline void merge_flags(SEL_ARG *arg) { maybe_flag|=arg->maybe_flag; }
   inline void maybe_smaller() { maybe_flag=1; }
   /* Return true iff it's a single-point null interval */
@@ -465,14 +409,13 @@ public:
     {
       new_max=arg->max_value; flag_max=arg->max_flag;
     }
-    return new (thd->mem_root) SEL_ARG(field, part,
-                                       new_min, new_max, flag_min,
+    return new (thd->mem_root) SEL_ARG(field, part, new_min, new_max, flag_min,
                                        flag_max,
                                        MY_TEST(maybe_flag && arg->maybe_flag));
   }
   SEL_ARG *clone_first(SEL_ARG *arg)
   {						// min <= X < arg->min
-    return new SEL_ARG(field, part, min_value, arg->min_value,
+    return new SEL_ARG(field,part, min_value, arg->min_value,
 		       min_flag, arg->min_flag & NEAR_MIN ? 0 : NEAR_MAX,
 		       maybe_flag | arg->maybe_flag);
   }
@@ -561,57 +504,6 @@ public:
     return 0;
   }
 
-  /* Save minimum and maximum, taking index order into account  */
-  void store_min_max(KEY_PART *kp,
-                     uint length,
-                     uchar **min_key, uint min_flag,
-                     uchar **max_key, uint max_flag,
-                     int *min_part, int *max_part)
-  {
-    if (kp[part].flag & HA_REVERSE_SORT) {
-      *max_part += store_min(length, max_key, min_flag);
-      *min_part += store_max(length, min_key, max_flag);
-    } else {
-      *min_part += store_min(length, min_key, min_flag);
-      *max_part += store_max(length, max_key, max_flag);
-    }
-  }
-  /*
-    Get the flag for range's starting endpoint, taking index order into
-    account.
-  */
-  uint get_min_flag(KEY_PART *kp)
-  {
-    return (kp[part].flag & HA_REVERSE_SORT)? invert_max_flag(max_flag) : min_flag;
-  }
-  /*
-    Get the flag for range's starting endpoint, taking index order into
-    account.
-  */
-  uint get_max_flag(KEY_PART *kp)
-  {
-    return (kp[part].flag & HA_REVERSE_SORT)? invert_min_flag(min_flag) : max_flag ;
-  }
-  /* Get the previous interval, taking index order into account */
-  inline SEL_ARG* index_order_prev(KEY_PART *kp)
-  {
-    return (kp[part].flag & HA_REVERSE_SORT)? next : prev;
-  }
-  /* Get the next interval, taking index order into account */
-  inline SEL_ARG* index_order_next(KEY_PART *kp)
-  {
-    return (kp[part].flag & HA_REVERSE_SORT)? prev : next;
-  }
-
-  /*
-    Produce a single multi-part interval, taking key part ordering into
-    account.
-  */
-  void store_next_min_max_keys(KEY_PART *key, uchar **cur_min_key,
-                               uint *cur_min_flag, uchar **cur_max_key,
-                               uint *cur_max_flag, int *min_part,
-                               int *max_part);
-
   /*
     Returns a number of keypart values appended to the key buffer
     for min key and max key. This function is used by both Range
@@ -624,8 +516,7 @@ public:
   int store_min_key(KEY_PART *key,
                     uchar **range_key,
                     uint *range_key_flag,
-                    uint last_part,
-                    bool start_key)
+                    uint last_part)
   {
     SEL_ARG *key_tree= first();
     uint res= key_tree->store_min(key[key_tree->part].store_length,
@@ -634,26 +525,15 @@ public:
     if (!res)
       return 0;
     *range_key_flag|= key_tree->min_flag;
-    SEL_ARG *nkp= key_tree->next_key_part;
-    if (nkp && nkp->type == SEL_ARG::KEY_RANGE &&
+    if (key_tree->next_key_part &&
+	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
         key_tree->part != last_part &&
-	nkp->part == key_tree->part+1 &&
+	key_tree->next_key_part->part == key_tree->part+1 &&
 	!(*range_key_flag & (NO_MIN_RANGE | NEAR_MIN)))
-    {
-      const bool asc = !(key[key_tree->part].flag & HA_REVERSE_SORT);
-      if (start_key == asc)
-      {
-        res+= nkp->store_min_key(key, range_key, range_key_flag, last_part,
-                                 start_key);
-      }
-      else
-      {
-        uint tmp_flag = invert_min_flag(*range_key_flag);
-        res += nkp->store_max_key(key, range_key, &tmp_flag, last_part,
-                                  start_key);
-        *range_key_flag = invert_max_flag(tmp_flag);
-      }
-    }
+      res+= key_tree->next_key_part->store_min_key(key,
+                                                   range_key,
+                                                   range_key_flag,
+                                                   last_part);
     return res;
   }
 
@@ -661,8 +541,7 @@ public:
   int store_max_key(KEY_PART *key,
                     uchar **range_key,
                     uint *range_key_flag,
-                    uint last_part,
-                    bool start_key)
+                    uint last_part)
   {
     SEL_ARG *key_tree= last();
     uint res=key_tree->store_max(key[key_tree->part].store_length,
@@ -670,26 +549,15 @@ public:
     if (!res)
       return 0;
     *range_key_flag|= key_tree->max_flag;
-    SEL_ARG *nkp= key_tree->next_key_part;
-    if (nkp && nkp->type == SEL_ARG::KEY_RANGE &&
+    if (key_tree->next_key_part &&
+	key_tree->next_key_part->type == SEL_ARG::KEY_RANGE &&
         key_tree->part != last_part &&
-	nkp->part == key_tree->part+1 &&
+	key_tree->next_key_part->part == key_tree->part+1 &&
 	!(*range_key_flag & (NO_MAX_RANGE | NEAR_MAX)))
-    {
-      const bool asc = !(key[key_tree->part].flag & HA_REVERSE_SORT);
-      if ((!start_key && asc) || (start_key && !asc))
-      {
-        res += nkp->store_max_key(key, range_key, range_key_flag, last_part,
-                                  start_key);
-      }
-      else
-      {
-        uint tmp_flag = invert_max_flag(*range_key_flag);
-        res += nkp->store_min_key(key, range_key, &tmp_flag, last_part,
-                                  start_key);
-        *range_key_flag = invert_min_flag(tmp_flag);
-      }
-    }
+      res+= key_tree->next_key_part->store_max_key(key,
+                                                   range_key,
+                                                   range_key_flag,
+                                                   last_part);
     return res;
   }
 
@@ -793,73 +661,6 @@ public:
   SEL_ARG *clone_tree(RANGE_OPT_PARAM *param);
 };
 
-/*
-  HowRangeOptimizerHandlesDescKeyparts
-  ====================================
-
-  Starting with MySQL-8.0 and MariaDB 10.8, index key parts may be descending,
-  for example:
-
-    INDEX idx1(col1, col2 DESC, col3, col4 DESC)
-
-  Range Optimizer handles this as follows:
-
-  Other than that, the SEL_ARG graph is built without any regard to DESC
-  keyparts.
-
-  For example, for an index
-
-    INDEX idx2(kp1 DESC, kp2)
-
-  and range
-
-    kp1 BETWEEN 10 and 20       (RANGE-1)
-
-  the SEL_ARG will have min_value=10, max_value=20
-
-  The ordering of key parts is taken into account when SEL_ARG graph is
-  linearized to ranges, in sel_arg_range_seq_next() and get_quick_keys().
-
-  The storage engine expects the first bound to be the first in the index and
-  the last bound to be the last, that is, for (RANGE-1) we will flip min and
-  max and generate these key_range structures:
-
-    start.key='20' , end.key='10'
-
-  See SEL_ARG::store_min_max(). The flag values are flipped as well, see
-  SEL_ARG::get_min_flag(), get_max_flag().
-
-  == Handling multiple key parts ==
-
-  For multi-part keys, the order of key parts has an effect on which ranges are
-  generated. Consider
-
-    kp1 >= 10 AND kp2 >'foo'
-
-  for INDEX(kp1 ASC, kp2 ASC) the range will be
-
-    (kp1, kp2) > (10, 'foo')
-
-  while for INDEX(kp1 ASC, kp2 DESC) it will be just
-
-    kp1 >= 10
-
-  Another example:
-
-    (kp1 BETWEEN 10 AND 20) AND (kp2 BETWEEN 'foo' AND 'quux')
-
-  with INDEX (kp1 ASC, kp2 ASC) will generate
-
-    (10, 'foo') <= (kp1, kp2) < (20, 'quux')
-
-  while with index INDEX (kp1 ASC, kp2 DESC) it will generate
-
-    (10, 'quux') <= (kp1, kp2) < (20, 'foo')
-
-  This is again achieved by sel_arg_range_seq_next() and get_quick_keys()
-  flipping SEL_ARG's min,max, their flags and next/prev as needed.
-*/
-
 extern MYSQL_PLUGIN_IMPORT SEL_ARG null_element;
 
 class SEL_ARG_IMPOSSIBLE: public SEL_ARG
@@ -913,14 +714,6 @@ public:
   */
   bool remove_false_where_parts;
 
-  /* If TRUE, do not construct index_merge plans */
-  bool disable_index_merge_plans;
-
-  /*
-    Which functions should give SQL notes for unusable keys.
-  */
-  Item_func::Bitmap note_unusable_keys;
-
   /*
     used_key_no -> table_key_no translation table. Only makes sense if
     using_real_indexes==TRUE
@@ -944,8 +737,9 @@ public:
   {
     return
       thd->killed ||
+      thd->is_fatal_error ||
       thd->is_error() ||
-      alloced_sel_args > thd->variables.optimizer_max_sel_args;
+      alloced_sel_args > SEL_ARG::MAX_SEL_ARGS;
   }
 };
 
@@ -986,7 +780,7 @@ class QUICK_RANGE :public Sql_alloc {
     }
 
   /**
-     Initializes a key_range object for communication with storage engine. 
+     Initalizes a key_range object for communication with storage engine. 
 
      This function facilitates communication with the Storage Engine API by
      translating the minimum endpoint of the interval represented by this
@@ -1007,7 +801,7 @@ class QUICK_RANGE :public Sql_alloc {
   }
   
   /**
-     Initializes a key_range object for communication with storage engine. 
+     Initalizes a key_range object for communication with storage engine. 
 
      This function facilitates communication with the Storage Engine API by
      translating the minimum endpoint of the interval represented by this
@@ -1024,7 +818,7 @@ class QUICK_RANGE :public Sql_alloc {
   }
 
   /**
-     Initializes a key_range object for communication with storage engine. 
+     Initalizes a key_range object for communication with storage engine. 
 
      This function facilitates communication with the Storage Engine API by
      translating the maximum endpoint of the interval represented by this
@@ -1045,7 +839,7 @@ class QUICK_RANGE :public Sql_alloc {
   }
 
   /**
-     Initializes a key_range object for communication with storage engine. 
+     Initalizes a key_range object for communication with storage engine. 
 
      This function facilitates communication with the Storage Engine API by
      translating the maximum endpoint of the interval represented by this
@@ -1140,15 +934,8 @@ public:
   */
   uint used_key_parts;
 
-  /*
-    Set to 1 if we used group by optimization to calculate number of rows
-    in the result, stored in table->opt_range_condition_rows.
-    This is only used for asserts.
-  */
-  bool group_by_optimization_used;
-
   QUICK_SELECT_I();
-  virtual ~QUICK_SELECT_I() = default;;
+  virtual ~QUICK_SELECT_I(){};
 
   /*
     Do post-constructor initialization.
@@ -1376,28 +1163,28 @@ public:
     { return new QUICK_RANGE_SELECT(thd, head, index, no_alloc, parent_alloc,
                                     create_error); }
   
-  void need_sorted_output() override;
-  int init() override;
-  int reset(void) override;
-  int get_next() override;
-  void range_end() override;
+  void need_sorted_output();
+  int init();
+  int reset(void);
+  int get_next();
+  void range_end();
   int get_next_prefix(uint prefix_length, uint group_key_parts, 
                       uchar *cur_prefix);
-  bool reverse_sorted() override { return 0; }
-  bool unique_key_range() override;
-  int init_ror_merged_scan(bool reuse_handler, MEM_ROOT *alloc) override;
-  void save_last_pos() override
+  bool reverse_sorted() { return 0; }
+  bool unique_key_range();
+  int init_ror_merged_scan(bool reuse_handler, MEM_ROOT *alloc);
+  void save_last_pos()
   { file->position(record); }
-  int get_type() override { return QS_TYPE_RANGE; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
+  int get_type() { return QS_TYPE_RANGE; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
 #ifndef DBUG_OFF
-  void dbug_dump(int indent, bool verbose) override;
+  void dbug_dump(int indent, bool verbose);
 #endif
-  void replace_handler(handler *new_file) override { file= new_file; }
-  QUICK_SELECT_I *make_reverse(uint used_key_parts_arg) override;
+  virtual void replace_handler(handler *new_file) { file= new_file; }
+  QUICK_SELECT_I *make_reverse(uint used_key_parts_arg);
 
-  void add_used_key_part_to_set() override;
+  virtual void add_used_key_part_to_set();
 
 private:
   /* Default copy ctor used by QUICK_SELECT_DESC */
@@ -1445,13 +1232,13 @@ public:
     :QUICK_RANGE_SELECT(thd, table, index_arg, no_alloc, parent_alloc,
     create_err)
     {};
-  QUICK_RANGE_SELECT *clone(bool *create_error) override
+  virtual QUICK_RANGE_SELECT *clone(bool *create_error)
     {
       DBUG_ASSERT(0);
       return new QUICK_RANGE_SELECT_GEOM(thd, head, index, no_alloc,
                                          parent_alloc, create_error);
     }
-  int get_next() override;
+  virtual int get_next();
 };
 
 
@@ -1527,16 +1314,16 @@ public:
   QUICK_INDEX_SORT_SELECT(THD *thd, TABLE *table);
   ~QUICK_INDEX_SORT_SELECT();
 
-  int  init() override;
-  void need_sorted_output() override { DBUG_ASSERT(0); /* Can't do it */ }
-  int  reset(void) override;
-  bool reverse_sorted() override { return false; }
-  bool unique_key_range() override { return false; }
-  bool is_keys_used(const MY_BITMAP *fields) override;
+  int  init();
+  void need_sorted_output() { DBUG_ASSERT(0); /* Can't do it */ }
+  int  reset(void);
+  bool reverse_sorted() { return false; }
+  bool unique_key_range() { return false; }
+  bool is_keys_used(const MY_BITMAP *fields);
 #ifndef DBUG_OFF
-  void dbug_dump(int indent, bool verbose) override;
+  void dbug_dump(int indent, bool verbose);
 #endif
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
 
   bool push_quick_back(QUICK_RANGE_SELECT *quick_sel_range);
 
@@ -1548,7 +1335,7 @@ public:
 
   MEM_ROOT alloc;
   THD *thd;
-  bool is_valid() override
+  virtual bool is_valid()
   {
     List_iterator_fast<QUICK_RANGE_SELECT> it(quick_selects);
     QUICK_RANGE_SELECT *quick;
@@ -1567,7 +1354,7 @@ public:
   /* used to get rows collected in Unique */
   READ_RECORD read_record;
 
-  void add_used_key_part_to_set() override;
+  virtual void add_used_key_part_to_set();
 };
 
 
@@ -1578,31 +1365,31 @@ private:
   /* true if this select is currently doing a clustered PK scan */
   bool  doing_pk_scan;
 protected:
-  int read_keys_and_merge() override;
+  int read_keys_and_merge();
 
 public:
   QUICK_INDEX_MERGE_SELECT(THD *thd_arg, TABLE *table)
     :QUICK_INDEX_SORT_SELECT(thd_arg, table) {}
 
-  int get_next() override;
-  int get_type() override { return QS_TYPE_INDEX_MERGE; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
+  int get_next();
+  int get_type() { return QS_TYPE_INDEX_MERGE; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
 };
 
 class QUICK_INDEX_INTERSECT_SELECT : public QUICK_INDEX_SORT_SELECT
 {
 protected:
-  int read_keys_and_merge() override;
+  int read_keys_and_merge();
 
 public:
   QUICK_INDEX_INTERSECT_SELECT(THD *thd_arg, TABLE *table)
     :QUICK_INDEX_SORT_SELECT(thd_arg, table) {}
 
   key_map filtered_scans;
-  int get_next() override;
-  int get_type() override { return QS_TYPE_INDEX_INTERSECT; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
+  int get_next();
+  int get_type() { return QS_TYPE_INDEX_INTERSECT; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
 };
 
 
@@ -1632,21 +1419,21 @@ public:
                              MEM_ROOT *parent_alloc);
   ~QUICK_ROR_INTERSECT_SELECT();
 
-  int  init() override;
-  void need_sorted_output() override { DBUG_ASSERT(0); /* Can't do it */ }
-  int  reset(void) override;
-  int  get_next() override;
-  bool reverse_sorted() override { return false; }
-  bool unique_key_range() override { return false; }
-  int get_type() override { return QS_TYPE_ROR_INTERSECT; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
-  bool is_keys_used(const MY_BITMAP *fields) override;
-  void add_used_key_part_to_set() override;
+  int  init();
+  void need_sorted_output() { DBUG_ASSERT(0); /* Can't do it */ }
+  int  reset(void);
+  int  get_next();
+  bool reverse_sorted() { return false; }
+  bool unique_key_range() { return false; }
+  int get_type() { return QS_TYPE_ROR_INTERSECT; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
+  bool is_keys_used(const MY_BITMAP *fields);
+  void add_used_key_part_to_set();
 #ifndef DBUG_OFF
-  void dbug_dump(int indent, bool verbose) override;
+  void dbug_dump(int indent, bool verbose);
 #endif
-  int init_ror_merged_scan(bool reuse_handler, MEM_ROOT *alloc) override;
+  int init_ror_merged_scan(bool reuse_handler, MEM_ROOT *alloc);
   bool push_quick_back(MEM_ROOT *alloc, QUICK_RANGE_SELECT *quick_sel_range);
 
   class QUICK_SELECT_WITH_RECORD : public Sql_alloc
@@ -1663,7 +1450,7 @@ public:
   */
   List<QUICK_SELECT_WITH_RECORD> quick_selects;
 
-  bool is_valid() override
+  virtual bool is_valid()
   {
     List_iterator_fast<QUICK_SELECT_WITH_RECORD> it(quick_selects);
     QUICK_SELECT_WITH_RECORD *quick;
@@ -1712,26 +1499,26 @@ public:
   QUICK_ROR_UNION_SELECT(THD *thd, TABLE *table);
   ~QUICK_ROR_UNION_SELECT();
 
-  int  init() override;
-  void need_sorted_output() override { DBUG_ASSERT(0); /* Can't do it */ }
-  int  reset(void) override;
-  int  get_next() override;
-  bool reverse_sorted() override { return false; }
-  bool unique_key_range() override { return false; }
-  int get_type() override { return QS_TYPE_ROR_UNION; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
-  bool is_keys_used(const MY_BITMAP *fields) override;
-  void add_used_key_part_to_set() override;
+  int  init();
+  void need_sorted_output() { DBUG_ASSERT(0); /* Can't do it */ }
+  int  reset(void);
+  int  get_next();
+  bool reverse_sorted() { return false; }
+  bool unique_key_range() { return false; }
+  int get_type() { return QS_TYPE_ROR_UNION; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
+  bool is_keys_used(const MY_BITMAP *fields);
+  void add_used_key_part_to_set();
 #ifndef DBUG_OFF
-  void dbug_dump(int indent, bool verbose) override;
+  void dbug_dump(int indent, bool verbose);
 #endif
 
   bool push_quick_back(QUICK_SELECT_I *quick_sel_range);
 
   List<QUICK_SELECT_I> quick_selects; /* Merged quick selects */
 
-  bool is_valid() override
+  virtual bool is_valid()
   {
     List_iterator_fast<QUICK_SELECT_I> it(quick_selects);
     QUICK_SELECT_I *quick;
@@ -1804,6 +1591,7 @@ private:
   uchar *group_prefix;    /* Key prefix consisting of the GROUP fields. */
   const uint group_prefix_len; /* Length of the group prefix. */
   uint group_key_parts;  /* A number of keyparts in the group prefix */
+  uchar *last_prefix;     /* Prefix of the last group for detecting EOF. */
   bool have_min;         /* Specify whether we are computing */
   bool have_max;         /*   a MIN, a MAX, or both.         */
   bool have_agg_distinct;/*   aggregate_function(DISTINCT ...).  */
@@ -1857,21 +1645,21 @@ public:
   void update_key_stat();
   void adjust_prefix_ranges();
   bool alloc_buffers();
-  int init() override;
-  void need_sorted_output() override { /* always do it */ }
-  int reset() override;
-  int get_next() override;
-  bool reverse_sorted() override { return false; }
-  bool unique_key_range() override { return false; }
-  int get_type() override { return QS_TYPE_GROUP_MIN_MAX; }
-  void add_keys_and_lengths(String *key_names, String *used_lengths) override;
-  void add_used_key_part_to_set() override;
+  int init();
+  void need_sorted_output() { /* always do it */ }
+  int reset();
+  int get_next();
+  bool reverse_sorted() { return false; }
+  bool unique_key_range() { return false; }
+  int get_type() { return QS_TYPE_GROUP_MIN_MAX; }
+  void add_keys_and_lengths(String *key_names, String *used_lengths);
+  void add_used_key_part_to_set();
 #ifndef DBUG_OFF
-  void dbug_dump(int indent, bool verbose) override;
+  void dbug_dump(int indent, bool verbose);
 #endif
   bool is_agg_distinct() { return have_agg_distinct; }
   bool loose_scan_is_scanning() { return is_index_scan; }
-  Explain_quick_select *get_explain(MEM_ROOT *alloc) override;
+  Explain_quick_select *get_explain(MEM_ROOT *alloc);
 };
 
 
@@ -1879,18 +1667,18 @@ class QUICK_SELECT_DESC: public QUICK_RANGE_SELECT
 {
 public:
   QUICK_SELECT_DESC(QUICK_RANGE_SELECT *q, uint used_key_parts);
-  QUICK_RANGE_SELECT *clone(bool *create_error) override
+  virtual QUICK_RANGE_SELECT *clone(bool *create_error)
     { DBUG_ASSERT(0); return new QUICK_SELECT_DESC(this, used_key_parts); }
-  int get_next() override;
-  bool reverse_sorted() override { return 1; }
-  int get_type() override { return QS_TYPE_RANGE_DESC; }
-  QUICK_SELECT_I *make_reverse(uint used_key_parts_arg) override
+  int get_next();
+  bool reverse_sorted() { return 1; }
+  int get_type() { return QS_TYPE_RANGE_DESC; }
+  QUICK_SELECT_I *make_reverse(uint used_key_parts_arg)
   {
     return this; // is already reverse sorted
   }
 private:
   bool range_reads_after_key(QUICK_RANGE *range);
-  int reset(void) override { rev_it.rewind(); return QUICK_RANGE_SELECT::reset(); }
+  int reset(void) { rev_it.rewind(); return QUICK_RANGE_SELECT::reset(); }
   List<QUICK_RANGE> rev_ranges;
   List_iterator<QUICK_RANGE> rev_it;
   uint used_key_parts;
@@ -1908,13 +1696,12 @@ class SQL_SELECT :public Sql_alloc {
     In other cases, NULL.
   */
   Item *pre_idx_push_select_cond;
-  TABLE *head;
-  IO_CACHE file;                // Positions to used records
-  ha_rows records;              // Records in use if read from file
-  ALL_READ_COST read_cost;      // Cost of reading rows
-  double read_time;             // Time to read rows (from read_cost)
-  key_map quick_keys;           // Possible quick keys
-  key_map needed_reg;           // Possible quick keys after prev tables.
+  TABLE	*head;
+  IO_CACHE file;		// Positions to used records
+  ha_rows records;		// Records in use if read from file
+  double read_time;		// Time to read rows
+  key_map quick_keys;		// Possible quick keys
+  key_map needed_reg;		// Possible quick keys after prev tables.
   table_map const_tables,read_tables;
   /* See PARAM::possible_keys */
   key_map possible_keys;
@@ -1924,53 +1711,31 @@ class SQL_SELECT :public Sql_alloc {
   ~SQL_SELECT();
   void cleanup();
   void set_quick(QUICK_SELECT_I *new_quick) { delete quick; quick= new_quick; }
-
-  /*
-    @return
-      true  - for ERROR and IMPOSSIBLE_RANGE
-      false   - Ok
-  */
-  bool check_quick(THD *thd, bool force_quick_range, ha_rows limit,
-                   Item_func::Bitmap note_unusable_keys)
+  bool check_quick(THD *thd, bool force_quick_range, ha_rows limit)
   {
     key_map tmp;
     tmp.set_all();
     return test_quick_select(thd, tmp, 0, limit, force_quick_range,
-                             FALSE, FALSE, FALSE,
-                             note_unusable_keys) != OK;
+                             FALSE, FALSE, FALSE) < 0;
   }
-
   /* 
     RETURN
-      0   if record must be skipped <-> (cond && cond->val_bool() == false)
+      0   if record must be skipped <-> (cond && cond->val_int() == 0)
      -1   if error
       1   otherwise
   */   
   inline int skip_record(THD *thd)
   {
-    int rc= MY_TEST(!cond || cond->val_bool());
+    int rc= MY_TEST(!cond || cond->val_int());
     if (thd->is_error())
       rc= -1;
     return rc;
   }
-
-  enum quick_select_return_type {
-    IMPOSSIBLE_RANGE = -1,
-    ERROR,
-    OK
-  };
-
-  enum quick_select_return_type
-  test_quick_select(THD *thd, key_map keys, table_map prev_tables,
-                    ha_rows limit,
-                    bool force_quick_range,
-                    bool ordered_output,
-                    bool remove_false_parts_of_where,
-                    bool only_single_index_range_scan,
-                    Item_func::Bitmap note_unusable_keys);
+  int test_quick_select(THD *thd, key_map keys, table_map prev_tables,
+			ha_rows limit, bool force_quick_range, 
+                        bool ordered_output, bool remove_false_parts_of_where,
+                        bool only_single_index_range_scan);
 };
-
-typedef enum SQL_SELECT::quick_select_return_type quick_select_return;
 
 
 class SQL_SELECT_auto
@@ -2012,12 +1777,12 @@ public:
       QUICK_RANGE_SELECT (thd, table, key, 1, NULL, create_err) 
   { (void) init(); }
   ~FT_SELECT() { file->ft_end(); }
-  QUICK_RANGE_SELECT *clone(bool *create_error) override
+  virtual QUICK_RANGE_SELECT *clone(bool *create_error)
     { DBUG_ASSERT(0); return new FT_SELECT(thd, head, index, create_error); }
-  int init() override { return file->ft_init(); }
-  int reset() override { return 0; }
-  int get_next() override { return file->ha_ft_read(record); }
-  int get_type() override { return QS_TYPE_FULLTEXT; }
+  int init() { return file->ft_init(); }
+  int reset() { return 0; }
+  int get_next() { return file->ha_ft_read(record); }
+  int get_type() { return QS_TYPE_FULLTEXT; }
 };
 
 FT_SELECT *get_ft_select(THD *thd, TABLE *table, uint key);

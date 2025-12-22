@@ -30,7 +30,6 @@
 #define TT_USEFRM               1U
 #define TT_FOR_UPGRADE          2U
 #define TT_FROM_MYSQL           4U
-#define TT_FORCE                8U
 
 /* Bits set in out_flag */
 #define O_NEW_DATA	2U
@@ -88,7 +87,7 @@ typedef struct st_handler_check_param
   /* Following is used to check if rows are visible */
   ulonglong max_trid, max_found_trid;
   ulonglong not_visible_rows_found;
-  ulonglong sort_buffer_length, orig_sort_buffer_length;
+  ulonglong sort_buffer_length;
   ulonglong use_buffers;                        /* Used as param to getopt() */
   size_t read_buffer_length, write_buffer_length, sort_key_blocks;
   time_t backup_time;                           /* To sign backup files */
@@ -114,8 +113,7 @@ typedef struct st_handler_check_param
   ulonglong progress, max_progress;
 
   int (*fix_record)(struct st_myisam_info *info, uchar *record, int keynum);
-  void (*init_repair_thread)(void *);
-  void *init_repair_thread_arg;
+
   mysql_mutex_t print_msg_mutex;
   my_bool need_print_msg_lock;
   myf malloc_flags;

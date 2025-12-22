@@ -148,9 +148,9 @@ public:
   }
 
   bool check_vcol_func_processor(void *arg) override {return FALSE; }
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_row>(thd, this); }
-  Item *do_build_clone(THD *thd) const override;
+  Item *build_clone(THD *thd) override;
 };
 
 #endif /* ITEM_ROW_INCLUDED */

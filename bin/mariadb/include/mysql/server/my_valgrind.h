@@ -1,4 +1,4 @@
-/* Copyright (C) 2010, 2022, MariaDB Corporation.
+/* Copyright (C) 2010, 2020, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -74,6 +74,12 @@ https://github.com/google/sanitizers/wiki/AddressSanitizerManualPoisoning */
 # define MEM_SET_VBITS(a,b,len) ((void) 0)
 # define REDZONE_SIZE 0
 #endif /* __has_feature(memory_sanitizer) */
+
+#ifdef HAVE_valgrind
+#define IF_VALGRIND(A,B) A
+#else
+#define IF_VALGRIND(A,B) B
+#endif
 
 #ifdef TRASH_FREED_MEMORY
 /*

@@ -16,6 +16,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class implementation */
+#endif
+
 #include "sql_alloc.h"
 #include <iterator>
 
@@ -50,7 +54,7 @@ public:
   {
     elements= tmp.elements;
     first= tmp.first;
-    next= elements ? tmp.next : &first;;
+    next= tmp.next;
     return *this;
   }
 
@@ -61,7 +65,7 @@ public:
     next= &first;
   }
 
-  inline void insert(T *element, T **next_ptr)
+  inline void link_in_list(T *element, T **next_ptr)
   {
     elements++;
     (*next)= element;
@@ -115,8 +119,8 @@ struct list_node :public Sql_alloc
 {
   list_node *next;
   void *info;
-  list_node(const void *info_par, list_node *next_par)
-    :next(next_par), info(const_cast<void *>(info_par))
+  list_node(void *info_par,list_node *next_par)
+    :next(next_par),info(info_par)
   {}
   list_node()					/* For end_of_list */
   {
@@ -124,6 +128,8 @@ struct list_node :public Sql_alloc
     next= this;
   }
 };
+
+typedef bool List_eq(void *a, void *b);
 
 extern MYSQL_PLUGIN_IMPORT list_node end_of_list;
 
@@ -206,9 +212,9 @@ public:
     }
     return 1;
   }
-  inline bool push_front(const void *info)
+  inline bool push_front(void *info)
   { return push_front_impl(new list_node(info, first)); }
-  inline bool push_front(const void *info, MEM_ROOT *mem_root)
+  inline bool push_front(void *info, MEM_ROOT *mem_root)
   { return push_front_impl(new (mem_root) list_node(info,first)); }
   void remove(list_node **prev)
   {
@@ -295,12 +301,11 @@ public:
   inline void **head_ref() { return first != &end_of_list ? &first->info : 0; }
   inline bool is_empty() { return first == &end_of_list ; }
   inline list_node *last_ref() { return &end_of_list; }
-  template <typename T= void>
-  inline bool add_unique(T *info, bool (*eq)(T *a, T *b))
+  inline bool add_unique(void *info, List_eq *eq)
   {
     list_node *node= first;
     for (;
-         node != &end_of_list && (!(*eq)(static_cast<T *>(node->info), info));
+         node != &end_of_list && (!(*eq)(node->info, info));
          node= node->next) ;
     if (node == &end_of_list)
       return push_back(info);
@@ -380,7 +385,7 @@ public:
 #endif // LIST_EXTRA_DEBUG
 
 protected:
-  void after(const void *info, list_node *node)
+  void after(void *info,list_node *node)
   {
     list_node *new_node=new list_node(info,node->next);
     node->next=new_node;
@@ -441,11 +446,11 @@ public:
   {
     el= &list->first;
   }
-  inline void *replace(const void *element)
+  inline void *replace(void *element)
   {						// Return old element
     void *tmp=current->info;
     DBUG_ASSERT(current->info != 0);
-    current->info= const_cast<void *>(element);
+    current->info=element;
     return tmp;
   }
   void *replace(base_list &new_list)
@@ -468,7 +473,7 @@ public:
     el=prev;
     current=0;					// Safeguard
   }
-  void after(const void *element)		// Insert element after current
+  void after(void *element)			// Insert element after current
   {
     list->after(element,current);
     current=current->next;
@@ -495,11 +500,11 @@ public:
   inline List() :base_list() {}
   inline List(const List<T> &tmp, MEM_ROOT *mem_root) :
     base_list(tmp, mem_root) {}
-  inline bool push_back(const T *a) { return base_list::push_back((void *)a); }
-  inline bool push_back(const T *a, MEM_ROOT *mem_root)
+  inline bool push_back(T *a) { return base_list::push_back(a); }
+  inline bool push_back(T *a, MEM_ROOT *mem_root)
   { return base_list::push_back((void*) a, mem_root); }
-  inline bool push_front(const T *a) { return base_list::push_front(a); }
-  inline bool push_front(const T *a, MEM_ROOT *mem_root)
+  inline bool push_front(T *a) { return base_list::push_front(a); }
+  inline bool push_front(T *a, MEM_ROOT *mem_root)
   { return base_list::push_front((void*) a, mem_root); }
   inline T* head() {return (T*) base_list::head(); }
   inline T** head_ref() {return (T**) base_list::head_ref(); }
@@ -508,7 +513,7 @@ public:
   inline void prepend(List<T> *list) { base_list::prepend(list); }
   inline void disjoin(List<T> *list) { base_list::disjoin(list); }
   inline bool add_unique(T *a, bool (*eq)(T *a, T *b))
-  { return base_list::add_unique<T>(a, eq); }
+  { return base_list::add_unique(a, (List_eq *)eq); }
   inline bool copy(const List<T> *list, MEM_ROOT *root)
   { return base_list::copy(list, root); }
   void delete_elements(void)
@@ -532,9 +537,10 @@ public:
   class Iterator;
   using value_type= T;
   using iterator= Iterator;
+  using const_iterator= const Iterator;
 
-  iterator begin() const { return iterator(first); }
-  iterator end() const { return iterator(); }
+  Iterator begin() const { return Iterator(first); }
+  Iterator end() const { return Iterator(); }
 
   class Iterator
   {
@@ -555,7 +561,7 @@ public:
       return *this;
     }
 
-    Iterator operator++(int)
+    T operator++(int)
     {
       Iterator tmp(*this);
       operator++();
@@ -793,9 +799,7 @@ public:
 class base_ilist_iterator
 {
   base_ilist *list;
-  struct ilink **el;
-protected:
-  struct ilink *current;
+  struct ilink **el,*current;
 public:
   base_ilist_iterator(base_ilist &list_par) :list(&list_par),
     el(&list_par.first),current(0) {}
@@ -806,13 +810,6 @@ public:
     if (current == &list->last) return 0;
     el= &current->next;
     return current;
-  }
-  /* Unlink element returned by last next() call */
-  inline void unlink(void)
-  {
-    struct ilink **tmp= current->prev;
-    current->unlink();
-    el= tmp;
   }
 };
 
@@ -843,13 +840,6 @@ template <class T> class I_List_iterator :public base_ilist_iterator
 public:
   I_List_iterator(I_List<T> &a) : base_ilist_iterator(a) {}
   inline T* operator++(int) { return (T*) base_ilist_iterator::next(); }
-  /* Remove element returned by last next() call */
-  inline void remove(void)
-  {
-    unlink();
-    delete (T*) current;
-    current= 0;                                 // Safety
-  }
 };
 
 /**
@@ -879,6 +869,7 @@ list_copy_and_replace_each_value(List<T> &list, MEM_ROOT *mem_root)
     it.replace(el->clone(mem_root));
 }
 
+void free_list(I_List <i_string_pair> *list);
 void free_list(I_List <i_string> *list);
 
 #endif // INCLUDES_MYSQL_SQL_LIST_H

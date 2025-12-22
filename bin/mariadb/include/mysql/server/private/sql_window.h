@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2016, 2022 MariaDB
+   Copyright (c) 2016, 2017 MariaDB
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -106,7 +106,7 @@ class Window_spec : public Sql_alloc
 {
   bool window_names_are_checked;
  public:
-  virtual ~Window_spec() = default;
+  virtual ~Window_spec() {}
 
   LEX_CSTRING *window_ref;
 
@@ -120,27 +120,22 @@ class Window_spec : public Sql_alloc
 
   Window_spec *referenced_win_spec;
 
-  /*
-    Window_spec objects are numbered by the number of their appearance in the
-    query. This is used by compare_order_elements() to provide a predictable
-    ordering of PARTITION/ORDER BY clauses.
-  */
-  int win_spec_number;
-
-  Window_spec(LEX_CSTRING *win_ref, SQL_I_List<ORDER> *part_list,
-              SQL_I_List<ORDER> *ord_list, Window_frame *win_frame)
+  Window_spec(LEX_CSTRING *win_ref, 
+              SQL_I_List<ORDER> *part_list,
+              SQL_I_List<ORDER> *ord_list,
+              Window_frame *win_frame)
     : window_names_are_checked(false), window_ref(win_ref),
       partition_list(part_list), save_partition_list(NULL),
       order_list(ord_list), save_order_list(NULL),
       window_frame(win_frame), referenced_win_spec(NULL) {}
 
-  virtual const Lex_ident_window name() { return Lex_ident_window(); }
+  virtual const char *name() { return NULL; }
 
   bool check_window_names(List_iterator_fast<Window_spec> &it);
 
-  const Lex_ident_window window_reference()
+  const char *window_reference()
   {
-    return window_ref ? Lex_ident_window(*window_ref) : Lex_ident_window();
+    return window_ref ? window_ref->str : NULL;
   }
 
   void join_partition_and_order_lists()
@@ -173,7 +168,7 @@ class Window_def : public Window_spec
     : Window_spec(win_ref, part_list, ord_list, win_frame),
       window_name(win_name) {}
  
-  const Lex_ident_window name() override { return Lex_ident_window(*window_name); }
+  const char *name() { return window_name->str; }
 
 };
 

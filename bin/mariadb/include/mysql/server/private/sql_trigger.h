@@ -30,8 +30,6 @@ struct TABLE_LIST;
 class Query_tables_list;
 typedef struct st_ddl_log_state DDL_LOG_STATE;
 
-#include <sql_list.h>
-
 /** Event on which trigger is invoked. */
 enum trg_event_type
 {
@@ -76,10 +74,8 @@ struct st_trg_execution_order
   /**
     Trigger name referenced in the FOLLOWS/PRECEDES clause of the
     CREATE TRIGGER statement.
-    Cannot be Lex_ident_trigger,
-    as this structure is used in %union in sql_yacc.yy
   */
-  LEX_CSTRING anchor_trigger_name; // Used in sql_yacc %union
+  LEX_CSTRING anchor_trigger_name;
 };
 
 
@@ -117,13 +113,7 @@ class Trigger :public Sql_alloc
 {
 public:
     Trigger(Table_triggers_list *base_arg, sp_head *code):
-    base(base_arg), body(code), next(0),
-    sql_mode{0},
-    hr_create_time{(unsigned long long)-1},
-    event{TRG_EVENT_MAX},
-    action_time{TRG_ACTION_MAX},
-    action_order{0},
-    updatable_columns{nullptr}
+    base(base_arg), body(code), next(0), trigger_fields(0), action_order(0)
   {
     bzero((char *)&subject_table_grants, sizeof(subject_table_grants));
   }
@@ -132,7 +122,12 @@ public:
   sp_head *body;
   Trigger *next;                                /* Next trigger of same type */
 
-  Lex_ident_trigger name;
+  /**
+    Heads of the lists linking items for all fields used in triggers
+    grouped by event and action_time.
+  */
+  Item_trigger_field *trigger_fields;
+  LEX_CSTRING name;
   LEX_CSTRING on_table_name;                     /* Raw table name */
   LEX_CSTRING definition;
   LEX_CSTRING definer;
@@ -145,20 +140,18 @@ public:
   GRANT_INFO subject_table_grants;
   sql_mode_t sql_mode;
   /* Store create time. Can't be mysql_time_t as this holds also sub seconds */
-  my_hrtime_t hr_create_time; // Create time timestamp in microseconds
+  ulonglong create_time;
   trg_event_type event;
   trg_action_time_type action_time;
   uint action_order;
-  List<LEX_CSTRING> *updatable_columns;
 
+  bool is_fields_updated_in_trigger(MY_BITMAP *used_fields);
   void get_trigger_info(LEX_CSTRING *stmt, LEX_CSTRING *body,
                         LEX_STRING *definer);
   /* Functions executed over each active trigger */
   bool change_on_table_name(void* param_arg);
   bool change_table_name(void* param_arg);
   bool add_to_file_list(void* param_arg);
-
-  bool match_updatable_columns(List<Item> &fields);
 };
 
 typedef bool (Trigger::*Triggers_processor)(void *arg);
@@ -179,7 +172,7 @@ class Table_triggers_list: public Sql_alloc
     BEFORE INSERT/UPDATE triggers.
   */
   Field             **record0_field;
-  uchar              *extra_null_bitmap, *extra_null_bitmap_init;
+  uchar              *extra_null_bitmap;
   /**
     Copy of TABLE::Field array with field pointers set to TABLE::record[1]
     buffer instead of TABLE::record[0] (used for OLD values in on UPDATE
@@ -230,7 +223,7 @@ public:
   */
   List<ulonglong> definition_modes_list;
   /** Create times for triggers */
-  List<ulonglong> hr_create_times;
+  List<ulonglong> create_times;
 
   List<LEX_CSTRING>  definers_list;
 
@@ -243,8 +236,8 @@ public:
   /* End of character ser context. */
 
   Table_triggers_list(TABLE *table_arg)
-    :record0_field(0), extra_null_bitmap(0), extra_null_bitmap_init(0),
-    record1_field(0), trigger_table(table_arg),
+    :record0_field(0), extra_null_bitmap(0), record1_field(0),
+    trigger_table(table_arg),
     m_has_unparseable_trigger(false), count(0)
   {
     bzero((char *) triggers, sizeof(triggers));
@@ -259,9 +252,7 @@ public:
                     String *stmt_query, DDL_LOG_STATE *ddl_log_state);
   bool process_triggers(THD *thd, trg_event_type event,
                         trg_action_time_type time_type,
-                        bool old_row_is_record1,
-                        bool *skip_row_indicator,
-                        List<Item> *fields_in_update_stmt= nullptr);
+                        bool old_row_is_record1);
   void empty_lists();
   bool create_lists_needed_for_files(MEM_ROOT *root);
   bool save_trigger_file(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_name);
@@ -271,11 +262,11 @@ public:
   static bool drop_all_triggers(THD *thd, const LEX_CSTRING *db,
                                 const LEX_CSTRING *table_name, myf MyFlags);
   static bool prepare_for_rename(THD *thd, TRIGGER_RENAME_PARAM *param,
-                                 const Lex_ident_db &db,
-                                 const Lex_ident_table &old_alias,
-                                 const Lex_ident_table &old_table,
-                                 const Lex_ident_db &new_db,
-                                 const Lex_ident_table &new_table);
+                                 const LEX_CSTRING *db,
+                                 const LEX_CSTRING *old_alias,
+                                 const LEX_CSTRING *old_table,
+                                 const LEX_CSTRING *new_db,
+                                 const LEX_CSTRING *new_table);
   static bool change_table_name(THD *thd, TRIGGER_RENAME_PARAM *param,
                                 const LEX_CSTRING *db,
                                 const LEX_CSTRING *old_alias,
@@ -285,7 +276,7 @@ public:
   void add_trigger(trg_event_type event_type, 
                    trg_action_time_type action_time,
                    trigger_order_type ordering_clause,
-                   const Lex_ident_trigger &anchor_trigger_name,
+                   LEX_CSTRING *anchor_trigger_name,
                    Trigger *trigger);
   Trigger *get_trigger(trg_event_type event_type, 
                        trg_action_time_type action_time)
@@ -310,8 +301,6 @@ public:
             has_triggers(TRG_EVENT_DELETE,TRG_ACTION_AFTER));
   }
 
-  bool match_updatable_columns(List<Item> *fields);
-
   void mark_fields_used(trg_event_type event);
 
   void set_parse_error_message(char *error_message);
@@ -323,15 +312,11 @@ public:
                                             TABLE_LIST *table_list);
 
   Field **nullable_fields() { return record0_field; }
-  void clear_extra_null_bitmap()
+  void reset_extra_null_bitmap()
   {
-    if (size_t null_bytes= extra_null_bitmap_init - extra_null_bitmap)
-      bzero(extra_null_bitmap, null_bytes);
-  }
-  void default_extra_null_bitmap()
-  {
-    if (size_t null_bytes= extra_null_bitmap_init - extra_null_bitmap)
-      memcpy(extra_null_bitmap, extra_null_bitmap_init, null_bytes);
+    size_t null_bytes= (trigger_table->s->fields -
+                        trigger_table->s->null_fields + 7)/8;
+    bzero(extra_null_bitmap, null_bytes);
   }
 
   Trigger *find_trigger(const LEX_CSTRING *name, bool remove_from_list);
@@ -358,12 +343,6 @@ private:
       return true;
     }
     return false;
-  }
-
-public:
-  TABLE *get_subject_table()
-  {
-    return trigger_table;
   }
 };
 

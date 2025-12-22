@@ -96,10 +96,6 @@ static inline bool append_identifier(THD *thd, String *packet, const LEX_CSTRING
 {
   return append_identifier(thd, packet, name->str, name->length);
 }
-
-bool append_identifier_opt_casedn(THD *thd, String *to,
-                                  const LEX_CSTRING &ident, bool casedn);
-
 void mysqld_list_fields(THD *thd,TABLE_LIST *table, const char *wild);
 int mysqld_dump_create_info(THD *thd, TABLE_LIST *table_list, int fd);
 bool mysqld_show_create_get_fields(THD *thd, TABLE_LIST *table_list,
@@ -109,7 +105,6 @@ void mysqld_show_create_db_get_fields(THD *thd, List<Item> *field_list);
 bool mysqld_show_create_db(THD *thd, LEX_CSTRING *db_name,
                            LEX_CSTRING *orig_db_name,
                            const DDL_options_st &options);
-bool mysql_show_create_server(THD *thd, LEX_CSTRING *name);
 
 void mysqld_list_processes(THD *thd,const char *user,bool verbose);
 int mysqld_show_status(THD *thd);
@@ -160,36 +155,27 @@ THD *find_thread_by_id(longlong id, bool query_id= false);
 
 class select_result_explain_buffer;
 /*
-  SHOW EXPLAIN/SHOW ANALYZE request object.
+  SHOW EXPLAIN request object. 
 */
 
 class Show_explain_request : public Apc_target::Apc_call
 {
 public:
-  THD *target_thd;  /* thd that we're running SHOW EXPLAIN/ANALYZE for */
-  THD *request_thd; /* thd that run SHOW EXPLAIN/ANALYZE command */
- 
-  /*
-    Set to TRUE if you need the result in JSON format,
-    FALSE - in traditional tabular
-  */
-  bool is_json_format= false;
-
-  /* FALSE for SHOW EXPLAIN, TRUE - for SHOW ANALYZE*/
-  bool is_analyze;
-
+  THD *target_thd;  /* thd that we're running SHOW EXPLAIN for */
+  THD *request_thd; /* thd that run SHOW EXPLAIN command */
+  
   /* If true, there was some error when producing EXPLAIN output. */
   bool failed_to_produce;
    
-  /* SHOW EXPLAIN/ANALYZE will be stored here */
+  /* SHOW EXPLAIN will be stored here */
   select_result_explain_buffer *explain_buf;
   
-  /* Query that we've got SHOW EXPLAIN/ANALYZE for */
+  /* Query that we've got SHOW EXPLAIN for */
   String query_str;
   
-  void call_in_target_thread() override;
+  /* Overloaded virtual function */
+  void call_in_target_thread();
 };
-
 
 /**
   Condition pushdown used for INFORMATION_SCHEMA / SHOW queries.

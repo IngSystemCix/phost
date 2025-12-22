@@ -118,7 +118,7 @@ public:
     set_maybe_null();
   }
   bool fix_fields(THD *thd, Item **ref) override;
-  bool fix_length_and_dec(THD *thd) override;
+  bool fix_length_and_dec() override;
   bool const_item() const override
   {
     return const_item_cache && (!nodeset_func || nodeset_func->const_item());
@@ -137,7 +137,7 @@ public:
     return name;
   }
   String *val_str(String *) override;
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_xml_extractvalue>(thd, this); }
 };
 
@@ -158,7 +158,7 @@ public:
     return name;
   }
   String *val_str(String *) override;
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_xml_update>(thd, this); }
 };
 

@@ -19,7 +19,6 @@
 #ifndef MYSQL_ABI_CHECK
 #include <stdarg.h>
 #endif
-#include <my_attribute.h>
 
 /**
   @file
@@ -66,10 +65,8 @@ extern struct logger_service_st {
                          unsigned long long size_limit,
                          unsigned int rotations);
   int (*close)(LOGGER_HANDLE *log);
-  int (*vprintf)(LOGGER_HANDLE *log, const char *fmt, va_list argptr)
-    ATTRIBUTE_FORMAT_FPTR(printf, 2, 0);
-  int (*printf)(LOGGER_HANDLE *log, const char *fmt, ...)
-    ATTRIBUTE_FORMAT_FPTR(printf, 2, 3);
+  int (*vprintf)(LOGGER_HANDLE *log, const char *fmt, va_list argptr);
+  int (*printf)(LOGGER_HANDLE *log, const char *fmt, ...);
   int (*write)(LOGGER_HANDLE *log, const char *buffer, size_t size);
   int (*rotate)(LOGGER_HANDLE *log);
 } *logger_service;
@@ -93,10 +90,8 @@ extern struct logger_service_st {
                              unsigned long long size_limit,
                              unsigned int rotations);
   int logger_close(LOGGER_HANDLE *log);
-  int logger_vprintf(LOGGER_HANDLE *log, const char *fmt, va_list argptr)
-    ATTRIBUTE_FORMAT(printf, 2, 0);
-  int logger_printf(LOGGER_HANDLE *log, const char *fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
+  int logger_vprintf(LOGGER_HANDLE *log, const char *fmt, va_list argptr);
+  int logger_printf(LOGGER_HANDLE *log, const char *fmt, ...);
   int logger_write(LOGGER_HANDLE *log, const char *buffer, size_t size);
   int logger_rotate(LOGGER_HANDLE *log); 
 #endif

@@ -15,7 +15,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
-/* This file should be included when using myisam_functions */
+/* This file should be included when using myisam_funktions */
 
 #ifndef _myisam_h
 #define _myisam_h
@@ -154,12 +154,12 @@ typedef struct st_mi_create_info
   ulonglong auto_increment;
   ulonglong data_file_length;
   ulonglong key_file_length;
-  uint old_options, rec_reflength;
+  uint old_options;
   uint16 language;
   my_bool with_auto_increment;
 } MI_CREATE_INFO;
 
-struct st_myisam_info;			/* For reference */
+struct st_myisam_info;			/* For referense */
 struct st_mi_isam_share;
 typedef struct st_myisam_info MI_INFO;
 struct st_mi_s_param;
@@ -357,7 +357,6 @@ typedef struct st_mi_sort_param
   MEM_ROOT wordroot;
   uchar *record;
   MY_TMPDIR *tmpdir;
-  HA_CHECK *check_param;
 
   /*
     The next two are used to collect statistics, see update_key_parts for
@@ -374,7 +373,7 @@ typedef struct st_mi_sort_param
   my_bool fix_datafile, master;
   my_bool calc_checksum;                /* calculate table checksum */
 
-  int (*key_cmp)(void *, const void *, const void *);
+  int (*key_cmp)(struct st_mi_sort_param *, const void *, const void *);
   int (*key_read)(struct st_mi_sort_param *,void *);
   int (*key_write)(struct st_mi_sort_param *, const void *);
   void (*lock_in_memory)(HA_CHECK *);
@@ -436,8 +435,6 @@ int thr_write_keys(MI_SORT_PARAM *sort_param);
 int sort_write_record(MI_SORT_PARAM *sort_param);
 int _create_index_by_sort(MI_SORT_PARAM *info,my_bool no_messages, ulonglong);
 my_bool mi_too_big_key_for_sort(MI_KEYDEF *key, ha_rows rows);
-struct OPTIMIZER_COSTS;
-void myisam_update_optimizer_costs(struct OPTIMIZER_COSTS *costs);
 
 #ifdef	__cplusplus
 }

@@ -35,7 +35,7 @@
 
 #define HA_OPEN_ABORT_IF_LOCKED		0U	/* default */
 #define HA_OPEN_WAIT_IF_LOCKED		1U
-#define HA_OPEN_IGNORE_IF_LOCKED	2U      /* Ignore lock error */
+#define HA_OPEN_IGNORE_IF_LOCKED	2U
 #define HA_OPEN_TMP_TABLE		4U	/* Table is a temp table */
 #define HA_OPEN_DELAY_KEY_WRITE		8U	/* Don't update index  */
 #define HA_OPEN_ABORT_IF_CRASHED	16U
@@ -48,9 +48,6 @@
 #define HA_OPEN_NO_PSI_CALL             1024U   /* Don't call/connect PSI */
 #define HA_OPEN_MERGE_TABLE		2048U
 #define HA_OPEN_FOR_CREATE              4096U
-#define HA_OPEN_FOR_DROP                (1U << 13) /* Open part of drop */
-#define HA_OPEN_GLOBAL_TMP_TABLE	(1U << 14) /* TMP table used by repliction */
-#define HA_OPEN_SIZE_TRACKING           (1U << 15)
 
 /*
   Allow opening even if table is incompatible as this is for ALTER TABLE which
@@ -99,18 +96,15 @@ enum ha_rkey_function {
   HA_READ_MBR_EQUAL
 };
 
-/* Key algorithm types (stored in .frm) */
+	/* Key algorithm types */
 
 enum ha_key_alg {
-  HA_KEY_ALG_UNDEF=       0,            /* Not specified. Practically the
-                                           key will be B-tree or hash   */
-  HA_KEY_ALG_BTREE=       1,            /* B-tree, default one          */
-  HA_KEY_ALG_RTREE=       2,            /* R-tree, for spatial searches */
-  HA_KEY_ALG_HASH=        3,            /* HASH keys (HEAP tables)      */
-  HA_KEY_ALG_FULLTEXT=    4,            /* FULLTEXT                     */
-  HA_KEY_ALG_LONG_HASH=   5,            /* long BLOB keys               */
-  HA_KEY_ALG_UNIQUE_HASH= 6,            /* Internal UNIQUE hash (Aria)  */
-  HA_KEY_ALG_VECTOR=      7             /* Vector search index          */
+  HA_KEY_ALG_UNDEF=	0,		/* Not specified (old file) */
+  HA_KEY_ALG_BTREE=	1,		/* B-tree, default one          */
+  HA_KEY_ALG_RTREE=	2,		/* R-tree, for spatial searches */
+  HA_KEY_ALG_HASH=	3,		/* HASH keys (HEAP tables) */
+  HA_KEY_ALG_FULLTEXT=	4,		/* FULLTEXT (MyISAM tables) */
+  HA_KEY_ALG_LONG_HASH= 5		/* long BLOB keys */
 };
 
         /* Storage media types */ 
@@ -136,7 +130,7 @@ enum ha_extra_function {
   HA_EXTRA_NO_USER_CHANGE=9,		/* No user is allowed to write */
   HA_EXTRA_KEY_CACHE=10,
   HA_EXTRA_NO_KEY_CACHE=11,
-  HA_EXTRA_WAIT_LOCK=12,		/* Wait until file is available (def) */
+  HA_EXTRA_WAIT_LOCK=12,		/* Wait until file is avalably (def) */
   HA_EXTRA_NO_WAIT_LOCK=13,		/* If file is locked, return quickly */
   HA_EXTRA_WRITE_CACHE=14,		/* Use write cache in ha_write() */
   HA_EXTRA_FLUSH_CACHE=15,		/* flush write_record_cache */
@@ -224,9 +218,8 @@ enum ha_extra_function {
   HA_EXTRA_BEGIN_ALTER_COPY,
   /** Finish writing rows during ALTER TABLE...ALGORITHM=COPY. */
   HA_EXTRA_END_ALTER_COPY,
-  /** Abort of writing rows during ALTER TABLE..ALGORITHM=COPY or
-  CREATE..SELCT */
-  HA_EXTRA_ABORT_ALTER_COPY
+  /** IGNORE is being used for the insert statement */
+  HA_EXTRA_IGNORE_INSERT
 };
 
 /* Compatible option, to be deleted in 6.0 */
@@ -274,49 +267,46 @@ enum ha_base_keytype {
   Note that these can only be up to 16 bits!
 */
 
-#define HA_NOSAME                  1U   /* Set if not dupplicated records */
-#define HA_PACK_KEY                2U   /* Pack string key to previous key */
-#define HA_SPACE_PACK_USED         4U   /* Test for if SPACE_PACK used */
-#define HA_VAR_LENGTH_KEY          8U   /* automatic bit */
-#define HA_AUTO_KEY               16U   /* MEMORY/MyISAM/Aria internal */
-#define HA_BINARY_PACK_KEY        32U   /* Packing of all keys to prev key */
-#define HA_NULL_PART_KEY          64U   /* automatic bit */
-#define HA_FULLTEXT_legacy       128U   /* For full-text search */
-#define HA_SORT_ALLOWS_SAME      512U   /* Intern bit when sorting records */
-#define HA_SPATIAL_legacy       1024U   /* For spatial search */
-#define HA_NULL_ARE_EQUAL       2048U   /* NULL in key are cmp as equal */
-#define HA_USES_COMMENT         4096U   /* automatic bit */
-#define HA_GENERATED_KEY        8192U   /* Automatically generated key */
-#define HA_USES_PARSER         16384U   /* Fulltext index uses [pre]parser */
-#define HA_USES_BLOCK_SIZE     32768U   /* automatic bit */
+#define HA_NOSAME		 1U	/* Set if not dupplicated records */
+#define HA_PACK_KEY		 2U	/* Pack string key to previous key */
+#define HA_AUTO_KEY		 16U
+#define HA_BINARY_PACK_KEY	 32U	/* Packing of all keys to prev key */
+#define HA_FULLTEXT		128U    /* For full-text search */
+#define HA_UNIQUE_CHECK		256U	/* Check the key for uniqueness */
+#define HA_SPATIAL		1024U   /* For spatial search */
+#define HA_NULL_ARE_EQUAL	2048U	/* NULL in key are cmp as equal */
+#define HA_GENERATED_KEY	8192U	/* Automatically generated key */
+
+        /* The combination of the above can be used for key type comparison. */
+#define HA_KEYFLAG_MASK (HA_NOSAME | HA_PACK_KEY | HA_AUTO_KEY | \
+                         HA_BINARY_PACK_KEY | HA_FULLTEXT | HA_UNIQUE_CHECK | \
+                         HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY)
 
 /*
   Key contains partial segments.
 
   This flag is internal to the MySQL server by design. It is not supposed
   neither to be saved in FRM-files, nor to be passed to storage engines.
-  It is intended to pass information into internal sort_keys(KEY *, KEY *)
-  function.
+  It is intended to pass information into internal static sort_keys(KEY *,
+  KEY *) function.
 
   This flag can be calculated -- it's based on key lengths comparison.
 */
-#define HA_KEY_HAS_PART_KEY_SEG 65536U
+#define HA_KEY_HAS_PART_KEY_SEG 65536
+/* Internal Flag Can be calcaluted */
+#define HA_INVISIBLE_KEY 2<<18
+	/* Automatic bits in key-flag */
+
+#define HA_SPACE_PACK_USED	 4	/* Test for if SPACE_PACK used */
+#define HA_VAR_LENGTH_KEY	 8
+#define HA_NULL_PART_KEY	 64
+#define HA_USES_COMMENT          4096
+#define HA_USES_PARSER           16384  /* Fulltext index uses [pre]parser */
+#define HA_USES_BLOCK_SIZE	 ((uint) 32768)
+#define HA_SORT_ALLOWS_SAME      512    /* Intern bit when sorting records */
 
 /* This flag can be used only in KEY::ext_key_flags */
-#define HA_EXT_NOSAME         131072U
-
-/*
-  Part of unique hash key. Used only for temporary (work) tables so is not
-  written to .frm files.
-*/
-#define HA_UNIQUE_HASH        262144U
-
-/* Internal Flag Can be calculated */
-#define HA_INVISIBLE_KEY     (2<<18)
-
-/* The combination of the above can be used for key type comparison. */
-#define HA_KEYFLAG_MASK (HA_NOSAME | HA_AUTO_KEY | HA_NULL_ARE_EQUAL | \
-                         HA_GENERATED_KEY | HA_UNIQUE_HASH)
+#define HA_EXT_NOSAME            131072
 
 	/* These flags can be added to key-seg-flag */
 
@@ -382,12 +372,6 @@ enum ha_base_keytype {
 #define HA_CREATE_INTERNAL_TABLE 256U
 #define HA_PRESERVE_INSERT_ORDER 512U
 #define HA_CREATE_NO_ROLLBACK    1024U
-/*
-  A temporary table that can be used by different threads, eg. replication
-  threads. This flag ensure that memory is not allocated with THREAD_SPECIFIC,
-  as we do for other temporary tables.
-*/
-#define HA_CREATE_GLOBAL_TMP_TABLE 2048U
 
 /* Flags used by start_bulk_insert */
 
@@ -456,14 +440,13 @@ enum ha_base_keytype {
 #define HA_ERR_FIRST            120     /* Copy of first error nr.*/
 
 #define HA_ERR_KEY_NOT_FOUND	120	/* Didn't find key on read or update */
-#define HA_ERR_FOUND_DUPP_KEY	121	/* Duplicate key on write */
+#define HA_ERR_FOUND_DUPP_KEY	121	/* Dupplicate key on write */
 #define HA_ERR_INTERNAL_ERROR   122     /* Internal error */
-#define HA_ERR_RECORD_CHANGED	123	/* Update with is recoverable */
+#define HA_ERR_RECORD_CHANGED	123	/* Uppdate with is recoverable */
 #define HA_ERR_WRONG_INDEX	124	/* Wrong index given to function */
 #define HA_ERR_CRASHED		126	/* Indexfile is crashed */
 #define HA_ERR_WRONG_IN_RECORD	127	/* Record-file is crashed */
 #define HA_ERR_OUT_OF_MEM	128	/* Out of memory */
-#define HA_ERR_RETRY_INIT 129 /* Initialization failed and should be retried */
 #define HA_ERR_NOT_A_TABLE      130     /* not a MYI file - no signature */
 #define HA_ERR_WRONG_COMMAND	131	/* Command not supported */
 #define HA_ERR_OLD_FILE		132	/* old databasfile */
@@ -475,7 +458,7 @@ enum ha_base_keytype {
 #define HA_ERR_UNSUPPORTED	138	/* unsupported extension used */
 #define HA_ERR_TO_BIG_ROW	139	/* Too big row */
 #define HA_WRONG_CREATE_OPTION	140	/* Wrong create option */
-#define HA_ERR_FOUND_DUPP_UNIQUE 141	/* Duplicate unique on write */
+#define HA_ERR_FOUND_DUPP_UNIQUE 141	/* Dupplicate unique on write */
 #define HA_ERR_UNKNOWN_CHARSET	 142	/* Can't open charset */
 #define HA_ERR_WRONG_MRG_TABLE_DEF 143  /* conflicting tables in MERGE */
 #define HA_ERR_CRASHED_ON_REPAIR 144	/* Last (automatic?) repair failed */
@@ -519,7 +502,7 @@ enum ha_base_keytype {
                                             illegal data being read */
 #define HA_ERR_NEW_FILE	          172	 /* New file format */
 #define HA_ERR_ROWS_EVENT_APPLY   173    /* The event could not be processed
-                                            no other handler error happened */
+                                            no other hanlder error happened */
 #define HA_ERR_INITIALIZATION     174    /* Error during initialization */
 #define HA_ERR_FILE_TOO_SHORT	  175	 /* File too short */
 #define HA_ERR_WRONG_CRC	  176	 /* Wrong CRC on page */
@@ -539,18 +522,12 @@ enum ha_base_keytype {
 #define HA_ERR_DISK_FULL          189
 #define HA_ERR_INCOMPATIBLE_DEFINITION 190
 #define HA_ERR_FTS_TOO_MANY_WORDS_IN_PHRASE 191 /* Too many words in a phrase */
-#define HA_ERR_DECRYPTION_FAILED  192 /* Table encrypted but decrypt failed */
+#define HA_ERR_DECRYPTION_FAILED  192 /* Table encrypted but decypt failed */
 #define HA_ERR_FK_DEPTH_EXCEEDED  193 /* FK cascade depth exceeded */
 #define HA_ERR_TABLESPACE_MISSING 194  /* Missing Tablespace */
 #define HA_ERR_SEQUENCE_INVALID_DATA 195
 #define HA_ERR_SEQUENCE_RUN_OUT   196
-#define HA_ERR_COMMIT_ERROR       197
-#define HA_ERR_PARTITION_LIST     198
-#define HA_ERR_NO_ENCRYPTION      199
-#define HA_ERR_ROLLBACK           200  /* Automatic rollback done */
-#define HA_ERR_LOCAL_TMP_SPACE_FULL   201
-#define HA_ERR_GLOBAL_TMP_SPACE_FULL  202
-#define HA_ERR_LAST               202  /* Copy of last error nr * */
+#define HA_ERR_LAST               196  /* Copy of last error nr * */
 
 /* Number of different errors */
 #define HA_ERR_ERRORS            (HA_ERR_LAST - HA_ERR_FIRST + 1)
@@ -680,8 +657,13 @@ typedef struct st_page_range
 #define unused_page_range { UNUSED_PAGE_NO, UNUSED_PAGE_NO }
 
 /* For number of records */
+#ifdef BIG_TABLES
 #define rows2double(A)	ulonglong2double(A)
 typedef my_off_t	ha_rows;
+#else
+#define rows2double(A)	(double) (A)
+typedef ulong		ha_rows;
+#endif
 
 #define HA_POS_ERROR	(~ (ha_rows) 0)
 #define HA_OFFSET_ERROR	(~ (my_off_t) 0)

@@ -17,6 +17,10 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface				/* gcc class implementation */
+#endif
+
 #include "sql_list.h"                           /* List */
 #include "table.h"                              /* TABLE_LIST */
 
@@ -51,15 +55,15 @@ typedef struct st_lock_param_type
   THD *thd;
   HA_CREATE_INFO *create_info;
   Alter_info *alter_info;
-  Alter_table_ctx *alter_ctx;
   TABLE *table;
   KEY *key_info_buffer;
+  LEX_CSTRING db;
+  LEX_CSTRING table_name;
   LEX_CUSTRING org_tabledef_version;
   uchar *pack_frm_data;
   uint key_count;
   uint db_options;
   size_t pack_frm_len;
-  // TODO: remove duplicate data: part_info can be accessed via table->part_info
   partition_info *part_info;
 } ALTER_PARTITION_PARAM_TYPE;
 
@@ -251,9 +255,10 @@ typedef int (*get_partitions_in_range_iter)(partition_info *part_info,
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 uint fast_alter_partition_table(THD *thd, TABLE *table,
                                 Alter_info *alter_info,
-                                Alter_table_ctx *alter_ctx,
                                 HA_CREATE_INFO *create_info,
-                                TABLE_LIST *table_list);
+                                TABLE_LIST *table_list,
+                                const LEX_CSTRING *db,
+                                const LEX_CSTRING *table_name);
 bool set_part_state(Alter_info *alter_info, partition_info *tab_part_info,
                     enum partition_state part_state);
 uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
@@ -273,40 +278,17 @@ bool verify_data_with_partition(TABLE *table, TABLE *part_table,
                                 uint32 part_id);
 bool compare_partition_options(HA_CREATE_INFO *table_create_info,
                                partition_element *part_elem);
-bool compare_table_with_partition(THD *thd, TABLE *table,
-                                  TABLE *part_table,
-                                  partition_element *part_elem,
-                                  uint part_id);
 bool partition_key_modified(TABLE *table, const MY_BITMAP *fields);
-bool write_log_replace_frm(ALTER_PARTITION_PARAM_TYPE *lpt,
-                            uint next_entry,
-                            const char *from_path,
-                            const char *to_path);
-
 #else
 #define partition_key_modified(X,Y) 0
 #endif
 
 int __attribute__((warn_unused_result))
-  create_partition_name(char *out, size_t outlen, const char *in1,
-                        const char *in2,
-                        uint name_variant, bool translate);
-
-static inline
+  create_partition_name(char *out, size_t outlen, const char *in1, const char
+                        *in2, uint name_variant, bool translate);
 int __attribute__((warn_unused_result))
-  create_partition_name(char *out, size_t outlen, const char *in1,
-                        const Lex_ident_partition &in2,
-                        uint name_variant, bool translate)
-{
-  return create_partition_name(out, outlen, in1, in2.str,
-                               name_variant, translate);
-}
-
-
-int __attribute__((warn_unused_result))
-  create_subpartition_name(char *out, size_t outlen, const char *in1,
-                           const Lex_ident_partition &in2,
-                           const Lex_ident_partition &in3, uint name_variant);
+  create_subpartition_name(char *out, size_t outlen, const char *in1, const
+                           char *in2, const char *in3, uint name_variant);
 
 void set_key_field_ptr(KEY *key_info, const uchar *new_buf,
                        const uchar *old_buf);

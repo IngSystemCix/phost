@@ -27,11 +27,12 @@
 // Derive your class from this struct to insert to a linked list.
 template <class Tag= void> struct ilist_node
 {
+  ilist_node() noexcept
 #ifndef DBUG_OFF
-  ilist_node() noexcept : next(NULL), prev(NULL) {}
-#else
-  ilist_node() = default;
+      : next(NULL), prev(NULL)
 #endif
+  {
+  }
 
   ilist_node(ilist_node *next, ilist_node *prev) noexcept
       : next(next), prev(prev)
@@ -106,10 +107,6 @@ public:
     }
 
     reference operator*() noexcept { return *static_cast<pointer>(node_); }
-    const_reference operator*() const noexcept
-    {
-      return *static_cast<pointer>(node_);
-    }
     pointer operator->() noexcept { return static_cast<pointer>(node_); }
 
     friend bool operator==(const Iterator &lhs, const Iterator &rhs) noexcept

@@ -19,12 +19,13 @@
 
 #if defined(HAVE_OPENSSL) && !defined(EMBEDDED_LIBRARY)
 
-  {"ssl", 0,
+  {"ssl", OPT_SSL_SSL,
    "Enable SSL for connection (automatically enabled with other flags).",
-   &opt_use_ssl, &opt_use_ssl, 0, GET_BOOL, OPT_ARG, 1, 0, 0, 0, 0, 0},
+   &opt_use_ssl, &opt_use_ssl, 0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"ssl-ca", OPT_SSL_CA,
    "CA file in PEM format (check OpenSSL docs, implies --ssl).",
-   &opt_ssl_ca, &opt_ssl_ca, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   &opt_ssl_ca, &opt_ssl_ca, 0, GET_STR, REQUIRED_ARG,
+   0, 0, 0, 0, 0, 0},
   {"ssl-capath", OPT_SSL_CAPATH,
    "CA directory (check OpenSSL docs, implies --ssl).",
    &opt_ssl_capath, &opt_ssl_capath, 0, GET_STR, REQUIRED_ARG,
@@ -38,10 +39,10 @@
   {"ssl-key", OPT_SSL_KEY, "X509 key in PEM format (implies --ssl).",
    &opt_ssl_key, &opt_ssl_key, 0, GET_STR, REQUIRED_ARG,
    0, 0, 0, 0, 0, 0},
-  {"ssl-crl", OPT_SSL_CRL, "Certificate revocation list (implies --ssl).",
+  {"ssl-crl", OPT_SSL_KEY, "Certificate revocation list (implies --ssl).",
    &opt_ssl_crl, &opt_ssl_crl, 0, GET_STR, REQUIRED_ARG,
    0, 0, 0, 0, 0, 0},
-  {"ssl-crlpath", OPT_SSL_CRLPATH,
+  {"ssl-crlpath", OPT_SSL_KEY, 
     "Certificate revocation list path (implies --ssl).",
    &opt_ssl_crlpath, &opt_ssl_crlpath, 0, GET_STR, REQUIRED_ARG,
    0, 0, 0, 0, 0, 0},
@@ -51,15 +52,11 @@
    0, 0, 0, 0, 0, 0},
 
 #ifdef MYSQL_CLIENT
-  {"ssl-fp", OPT_SSL_FP, "Server certificate fingerprint (implies --ssl).",
-   &opt_ssl_fp, &opt_ssl_fp, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"ssl-fplist", OPT_SSL_FPLIST, "File with accepted server certificate "
-   "fingerprints, one per line (implies --ssl).",
-   &opt_ssl_fplist, &opt_ssl_fplist, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-  {"ssl-verify-server-cert", 0,
-   "Verify server's certificate to prevent man-in-the-middle attacks",
+  {"ssl-verify-server-cert", OPT_SSL_VERIFY_SERVER_CERT,
+   "Verify server's \"Common Name\" in its cert against hostname used "
+   "when connecting. This option is disabled by default.",
    &opt_ssl_verify_server_cert, &opt_ssl_verify_server_cert,
-   0, GET_BOOL, OPT_ARG, 2, 0, 0, 0, 0, 0},
+   0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
 #endif /* HAVE_OPENSSL */
 #endif /* SSLOPT_LONGOPTS_INCLUDED */

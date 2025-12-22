@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2014, Oracle and/or its affiliates.
-   Copyright (c) 2013, 2021, MariaDB Corporation.
+   Copyright (c) 2013, 2020, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -85,8 +85,6 @@ public:
     ALTER_TABLE_LOCK_EXCLUSIVE
   };
 
-  Lex_ident_db db;
-  Lex_ident_table table_name;
 
   // Columns and keys to be dropped.
   List<Alter_drop>              drop_list;
@@ -106,88 +104,10 @@ public:
   ulong                         partition_flags;
   // Enable or disable keys.
   enum_enable_or_disable        keys_onoff;
-  // Used only in add_stat_drop_index()
-  TABLE                         *original_table;
   // List of partitions.
   List<const char>              partition_names;
   // Number of partitions.
   uint                          num_parts;
-
-  /* List of fields that we should delete statistics from */
-  List<Field> drop_stat_fields;
-
-  struct DROP_INDEX_STAT_PARAMS
-  {
-    KEY *key;
-    bool ext_prefixes_only;
-  };
-
-  struct RENAME_COLUMN_STAT_PARAMS
-  {
-    Field *field;
-    LEX_CSTRING *name;
-    uint duplicate_counter;                       // For temporary names
-  };
-  struct RENAME_INDEX_STAT_PARAMS
-  {
-    const KEY *key;
-    const LEX_CSTRING *name;
-    uint duplicate_counter;                       // For temporary names
-    uint usage_count;                             // How many rename entries
-  };
-
-  /* List of index that we should delete statistics from */
-  List<DROP_INDEX_STAT_PARAMS> drop_stat_indexes;
-
-  List<RENAME_COLUMN_STAT_PARAMS> rename_stat_fields;
-
-  List<RENAME_INDEX_STAT_PARAMS> rename_stat_indexes;
-
-  bool add_stat_drop_index(KEY *key, bool ext_prefixes_only,
-                           MEM_ROOT *mem_root)
-  {
-    DROP_INDEX_STAT_PARAMS *param;
-    if (!(param= (DROP_INDEX_STAT_PARAMS*)
-          alloc_root(mem_root, sizeof(*param))))
-      return true;
-    param->key=  key;
-    param->ext_prefixes_only= ext_prefixes_only;
-    return drop_stat_indexes.push_back(param, mem_root);
-  }
-
-  bool add_stat_drop_index(THD *thd, const LEX_CSTRING *key_name);
-
-  bool add_stat_rename_index(const KEY *key, const LEX_CSTRING *name,
-                             MEM_ROOT *mem_root)
-  {
-    RENAME_INDEX_STAT_PARAMS *param;
-    if (!(param= (RENAME_INDEX_STAT_PARAMS*)
-          alloc_root(mem_root, sizeof(*param))))
-      return true;
-    param->key=  key;
-    param->name= name;
-    param->usage_count= 0;
-    return rename_stat_indexes.push_back(param, mem_root);
-  }
-
-  bool add_stat_rename_field(Field *field, LEX_CSTRING *name,
-                             MEM_ROOT *mem_root)
-  {
-    RENAME_COLUMN_STAT_PARAMS *param;
-    if (!(param= (RENAME_COLUMN_STAT_PARAMS*)
-          alloc_root(mem_root, sizeof(*param))))
-      return true;
-    param->field= field;
-    param->name=  name;
-    param->duplicate_counter= 0;
-    return rename_stat_fields.push_back(param, mem_root);
-  }
-
-  bool collect_renamed_fields(THD *thd);
-
-  /* Delete/update statistics in EITS tables */
-  void apply_statistics_deletes_renames(THD *thd, TABLE *table);
-
 private:
   // Type of ALTER TABLE algorithm.
   enum_alter_table_algorithm    requested_algorithm;
@@ -200,7 +120,6 @@ public:
   Alter_info() :
   flags(0), partition_flags(0),
     keys_onoff(LEAVE_AS_IS),
-    original_table(0),
     num_parts(0),
     requested_algorithm(ALTER_TABLE_ALGORITHM_NONE),
     requested_lock(ALTER_TABLE_LOCK_DEFAULT)
@@ -215,10 +134,6 @@ public:
     create_list.empty();
     alter_index_ignorability_list.empty();
     check_constraint_list.empty();
-    drop_stat_fields.empty();
-    drop_stat_indexes.empty();
-    rename_stat_fields.empty();
-    rename_stat_indexes.empty();
     flags= 0;
     partition_flags= 0;
     keys_onoff= LEAVE_AS_IS;
@@ -311,22 +226,13 @@ public:
      @retval false  Supported lock type
      @retval true   Not supported value
   */
-  bool supports_lock(THD *thd, bool, Alter_inplace_info *ha_alter_info);
+  bool supports_lock(THD *thd, const Alter_inplace_info *ha_alter_info);
 
   /**
     Return user requested algorithm. If user does not specify
     algorithm then return alter_algorithm variable value.
    */
   enum_alter_table_algorithm algorithm(const THD *thd) const;
-  bool algorithm_is_nocopy(const THD *thd) const;
-  bool algorithm_not_specified() const
-  {
-    return requested_algorithm == ALTER_TABLE_ALGORITHM_NONE;
-  }
-  uint check_vcol_field(Item_field *f) const;
-
-  bool add_alter_list(THD *thd, LEX_CSTRING name, LEX_CSTRING new_name,
-                      bool exists);
 
 private:
   Alter_info &operator=(const Alter_info &rhs); // not implemented
@@ -344,15 +250,13 @@ public:
                   const LEX_CSTRING *new_db_arg, const LEX_CSTRING *new_name_arg);
 
   /**
-     @return true if the table is moved to another database or a new table
-     created by ALTER_PARTITION_CONVERT_OUT, false otherwise.
+     @return true if the table is moved to another database, false otherwise.
   */
   bool is_database_changed() const
   { return (new_db.str != db.str); };
 
   /**
-     @return true if the table is renamed or a new table created by
-     ALTER_PARTITION_CONVERT_OUT, false otherwise.
+     @return true if the table is renamed, false otherwise.
   */
   bool is_table_renamed() const
   { return (is_database_changed() || new_name.str != table_name.str); };
@@ -409,15 +313,15 @@ public:
 
   void report_implicit_default_value_error(THD *thd, const TABLE_SHARE *) const;
 public:
-  Create_field *implicit_default_value_error_field= nullptr;
-  bool         error_if_not_empty= false;
-  uint         tables_opened= 0;
-  Lex_ident_db db;
-  Lex_ident_table table_name;
+  Create_field *implicit_default_value_error_field;
+  bool         error_if_not_empty;
+  uint         tables_opened;
+  LEX_CSTRING  db;
+  LEX_CSTRING  table_name;
   LEX_CSTRING  storage_engine_name;
   LEX_CSTRING  alias;
-  Lex_ident_db new_db;
-  Lex_ident_table new_name;
+  LEX_CSTRING  new_db;
+  LEX_CSTRING  new_name;
   LEX_CSTRING  new_alias;
   LEX_CSTRING  tmp_name;
   LEX_CSTRING  tmp_storage_engine_name;
@@ -433,19 +337,17 @@ public:
     of table to the new version ER_FK_CANNOT_DELETE_PARENT error should be
     emitted.
   */
-  bool fk_error_if_delete_row= false;
+  bool         fk_error_if_delete_row;
   /** Name of foreign key for the above error. */
-  const char *fk_error_id= nullptr;
+  const char   *fk_error_id;
   /** Name of table for the above error. */
-  const char *fk_error_table= nullptr;
-  bool modified_primary_key= false;
-  bool fast_alter_partition= false;
+  const char   *fk_error_table;
   /** Indicates that we are altering temporary table */
-  bool tmp_table= false;
+  bool tmp_table;
 
 private:
   char new_filename[FN_REFLEN + 1];
-  CharBuffer<NAME_LEN> new_name_buff;
+  char new_alias_buff[NAME_LEN + 1];
   char tmp_name_buff[NAME_LEN + 1];
   char path[FN_REFLEN + 1];
   char new_path[FN_REFLEN + 1];
@@ -467,11 +369,13 @@ protected:
   /**
     Constructor.
   */
-  Sql_cmd_common_alter_table() = default;
+  Sql_cmd_common_alter_table()
+  {}
 
-  virtual ~Sql_cmd_common_alter_table() = default;
+  virtual ~Sql_cmd_common_alter_table()
+  {}
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_TABLE;
   }
@@ -488,13 +392,15 @@ public:
   /**
     Constructor, used to represent a ALTER TABLE statement.
   */
-  Sql_cmd_alter_table() = default;
+  Sql_cmd_alter_table()
+  {}
 
-  ~Sql_cmd_alter_table() = default;
+  ~Sql_cmd_alter_table()
+  {}
 
-  Storage_engine_name *option_storage_engine_name() override { return this; }
+  Storage_engine_name *option_storage_engine_name() { return this; }
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 };
 
 
@@ -512,13 +418,14 @@ public:
    :DDL_options(options)
   {}
 
-  ~Sql_cmd_alter_sequence() = default;
+  ~Sql_cmd_alter_sequence()
+  {}
 
-  enum_sql_command sql_command_code() const override
+  enum_sql_command sql_command_code() const
   {
     return SQLCOM_ALTER_SEQUENCE;
   }
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 };
 
 
@@ -538,7 +445,7 @@ public:
     : m_tablespace_op(tablespace_op_arg)
   {}
 
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
 private:
   const enum_tablespace_op_type m_tablespace_op;

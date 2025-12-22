@@ -16,6 +16,10 @@
 #ifndef _sql_cursor_h_
 #define _sql_cursor_h_
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface                              /* gcc class interface */
+#endif
+
 #include "sql_class.h"                          /* Query_arena */
 
 class JOIN;
@@ -35,7 +39,7 @@ class JOIN;
   its base class.
 */
 
-class Server_side_cursor: protected Query_arena
+class Server_side_cursor: protected Query_arena, public Sql_alloc
 {
 protected:
   /** Row destination used for fetch */
@@ -57,70 +61,8 @@ public:
   }
   virtual ~Server_side_cursor();
 
-  static void *operator new(size_t size, MEM_ROOT *mem_root)
-  { return alloc_root(mem_root, size); }
   static void operator delete(void *ptr, size_t size);
   static void operator delete(void *, MEM_ROOT *){}
-};
-
-
-/**
-  Materialized_cursor -- an insensitive materialized server-side
-  cursor. The result set of this cursor is saved in a temporary
-  table at open. The cursor itself is simply an interface for the
-  handler of the temporary table.
-*/
-
-class Materialized_cursor: public Server_side_cursor
-{
-  MEM_ROOT main_mem_root;
-  /* A fake unit to supply to select_send when fetching */
-  SELECT_LEX_UNIT fake_unit;
-  TABLE *table;
-  List<Item> item_list;
-  ulong fetch_limit;
-  ulong fetch_count;
-  bool is_rnd_inited;
-public:
-  Materialized_cursor(select_result *result, TABLE *table);
-
-  int send_result_set_metadata(THD *thd, List<Item> &send_result_set_metadata);
-  bool is_open() const override { return table != 0; }
-  int open(JOIN *join __attribute__((unused))) override;
-  void fetch(ulong num_rows) override;
-  void close() override;
-  bool export_structure(THD *thd, Row_definition_list *defs) override
-  {
-    return table->export_structure(thd, defs);
-  }
-  ~Materialized_cursor() override;
-
-  void on_table_fill_finished();
-};
-
-
-/**
-  Select_materialize -- a mediator between a cursor query and the
-  protocol. In case we were not able to open a non-materialzed
-  cursor, it creates an internal temporary HEAP table, and insert
-  all rows into it. When the table reaches max_heap_table_size,
-  it's converted to a MyISAM table. Later this table is used to
-  create a Materialized_cursor.
-*/
-
-class Select_materialize: public select_unit
-{
-  select_result *result; /**< the result object of the caller (PS or SP) */
-public:
-  Materialized_cursor *materialized_cursor;
-  Select_materialize(THD *thd_arg, select_result *result_arg):
-    select_unit(thd_arg), result(result_arg), materialized_cursor(0) {}
-  bool send_result_set_metadata(List<Item> &list, uint flags) override;
-  bool send_eof() override { return false; }
-  bool view_structure_only() const override
-  {
-    return result->view_structure_only();
-  }
 };
 
 

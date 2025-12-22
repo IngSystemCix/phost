@@ -24,20 +24,21 @@
   *provider* (encryption plugin).
 */
 
-#ifndef MYSQL_ABI_CHECK
-#include <my_alloca.h>
-#ifdef _WIN32
-#ifndef __cplusplus
-#define inline __inline
-#endif
-#endif
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 #ifndef MYSQL_ABI_CHECK
-#include <assert.h>
+#ifdef _WIN32
+#include <malloc.h>
+#ifndef __cplusplus
+#define inline __inline
+#endif
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+#include <stdlib.h>
+#else
+#include <alloca.h>
+#endif
 #endif
 
 /* returned from encryption_key_get_latest_version() */
@@ -104,11 +105,6 @@ static inline unsigned int encryption_key_version_exists(unsigned int id, unsign
   return encryption_key_get(id, version, NULL, &unused) != ENCRYPTION_KEY_VERSION_INVALID;
 }
 
-/** main entrypoint to perform encryption or decryption
- * @invariant `src` is valid for `slen`
- * @invariant `dst` is valid for `*dlen`, `*dlen` is initialized
- * @invariant `src` and `dst` do not overlap
- */
 static inline int encryption_crypt(const unsigned char* src, unsigned int slen,
                                    unsigned char* dst, unsigned int* dlen,
                                    const unsigned char* key, unsigned int klen,
@@ -117,23 +113,11 @@ static inline int encryption_crypt(const unsigned char* src, unsigned int slen,
 {
   void *ctx= alloca(encryption_ctx_size(key_id, key_version));
   int res1, res2;
-  unsigned int d1, d2= *dlen;
-
-  // Verify dlen is initialized properly. See MDEV-30389
-  assert(*dlen >= slen);
-  assert((dst[*dlen - 1]= 1));
-  // Verify buffers do not overlap
-  if (src < dst)
-    assert(src + slen <= dst);
-  else
-    assert(dst + *dlen <= src);
-
+  unsigned int d1, d2;
   if ((res1= encryption_ctx_init(ctx, key, klen, iv, ivlen, flags, key_id, key_version)))
     return res1;
   res1= encryption_ctx_update(ctx, src, slen, dst, &d1);
-  d2-= d1;
   res2= encryption_ctx_finish(ctx, dst + d1, &d2);
-
   *dlen= d1 + d2;
   return res1 ? res1 : res2;
 }
@@ -144,3 +128,4 @@ static inline int encryption_crypt(const unsigned char* src, unsigned int slen,
 
 #define MYSQL_SERVICE_ENCRYPTION_INCLUDED
 #endif
+

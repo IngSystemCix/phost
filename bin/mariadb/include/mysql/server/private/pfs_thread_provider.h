@@ -52,17 +52,17 @@ void pfs_register_thread_v1(const char *category,
                             int count);
 
 PSI_mutex*
-pfs_init_mutex_v1(PSI_mutex_key key, void *identity);
+pfs_init_mutex_v1(PSI_mutex_key key, const void *identity);
 
 void pfs_destroy_mutex_v1(PSI_mutex* mutex);
 
 PSI_rwlock*
-pfs_init_rwlock_v1(PSI_rwlock_key key, void *identity);
+pfs_init_rwlock_v1(PSI_rwlock_key key, const void *identity);
 
 void pfs_destroy_rwlock_v1(PSI_rwlock* rwlock);
 
 PSI_cond*
-pfs_init_cond_v1(PSI_cond_key key, void *identity);
+pfs_init_cond_v1(PSI_cond_key key, const void *identity);
 
 void pfs_destroy_cond_v1(PSI_cond* cond);
 
@@ -79,8 +79,6 @@ void pfs_set_thread_os_id_v1(PSI_thread *thread);
 
 PSI_thread*
 pfs_get_thread_v1(void);
-
-const char *pfs_get_thread_class_name_v1(void);
 
 void pfs_set_thread_user_v1(const char *user, int user_len);
 
@@ -100,8 +98,6 @@ void pfs_set_connection_type_v1(opaque_vio_type conn_type);
 void pfs_set_thread_info_v1(const char* info, uint info_len);
 
 void pfs_set_thread_v1(PSI_thread* thread);
-
-void pfs_set_thread_peer_port_v1(PSI_thread *thread, uint port);
 
 void pfs_delete_current_thread_v1(void);
 

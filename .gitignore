@@ -223,3 +223,9 @@ powershell_history.txt
 # Archivos de sincronización
 Sync.log
 *.sync
+
+# Archivos de control de procesos
+
+/control/*.json
+/control/*.lock
+/control/*.pid

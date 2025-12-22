@@ -22,6 +22,10 @@
   Declarations for the Debug Sync Facility. See debug_sync.cc for details.
 */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface                      /* gcc class implementation */
+#endif
+
 class THD;
 
 #if defined(ENABLED_DEBUG_SYNC)

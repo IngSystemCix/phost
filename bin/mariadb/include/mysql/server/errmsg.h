@@ -36,9 +36,8 @@ extern const char *client_errors[];	/* Error messages */
 #define CR_MIN_ERROR		2000	/* For easier client code */
 #define CR_MAX_ERROR		2999
 #if !defined(ER)
-#define ER(X) (((X) >= CR_ERROR_FIRST && (X) <= CR_ERROR_LAST) \
-               ? client_errors[(X)-CR_ERROR_FIRST]             \
-               : client_errors[CR_UNKNOWN_ERROR-CR_ERROR_FIRST])
+#define ER(X) (((X) >= CR_ERROR_FIRST && (X) <= CR_ERROR_LAST)? \
+               client_errors[(X)-CR_ERROR_FIRST]: client_errors[CR_UNKNOWN_ERROR])
 
 #endif
 #define CLIENT_ERRMAP		2	/* Errormap used by my_error() */

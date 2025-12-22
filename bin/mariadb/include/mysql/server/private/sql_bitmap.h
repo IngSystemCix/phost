@@ -90,7 +90,7 @@ public:
    or to call set_all()/clear_all()/set_prefix()
    to initialize bitmap.
   */
-  Bitmap() = default;
+  Bitmap() { }
 
   explicit Bitmap(uint prefix)
   {
@@ -270,20 +270,12 @@ public:
   {
     return buffer[0];
   }
-  uint bits_set() const
+  uint bits_set()
   {
     uint res= 0;
     for (size_t i= 0; i < ARRAY_ELEMENTS; i++)
-      if (buffer[i])
-        res+= my_count_bits(buffer[i]);
+      res += my_count_bits(buffer[i]);
     return res;
-  }
-  uint find_first_bit() const
-  {
-    for (size_t i= 0; i < ARRAY_ELEMENTS; i++)
-      if (buffer[i])
-        return (uint)i*BITS_PER_ELEMENT + my_find_first_bit(buffer[i]);
-    return width;
   }
   class Iterator
   {

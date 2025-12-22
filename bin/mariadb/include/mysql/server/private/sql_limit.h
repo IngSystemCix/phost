@@ -37,8 +37,6 @@ class Select_limit_counters
 
    void set_limit(ha_rows limit, ha_rows offset, bool with_ties_arg)
    {
-      if (limit == 0)
-        offset= 0;
       offset_limit_cnt= offset;
       select_limit_cnt= limit;
       with_ties= with_ties_arg;
@@ -59,15 +57,6 @@ class Select_limit_counters
      offset_limit_cnt= 0;
      select_limit_cnt= 1;
      with_ties= false;
-   }
-
-   /* Send the first row, still honoring offset_limit_cnt */
-   void send_first_row()
-   {
-     /* Guard against overflow */
-     if ((select_limit_cnt= offset_limit_cnt +1 ) == 0)
-       select_limit_cnt= offset_limit_cnt;
-     // with_ties= false;   Remove // on merge to 10.6
    }
 
    bool is_unlimited() const

@@ -36,7 +36,8 @@ protected:
       m_set_signal_information(set)
   {}
 
-  virtual ~Sql_cmd_common_signal() = default;
+  virtual ~Sql_cmd_common_signal()
+  {}
 
   /**
     Evaluate each signal condition items for this statement.
@@ -83,14 +84,15 @@ public:
     : Sql_cmd_common_signal(cond, set)
   {}
 
-  virtual ~Sql_cmd_signal() = default;
+  virtual ~Sql_cmd_signal()
+  {}
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_SIGNAL;
   }
 
-  bool execute(THD *thd) override;
+  virtual bool execute(THD *thd);
 };
 
 /**
@@ -109,14 +111,15 @@ public:
     : Sql_cmd_common_signal(cond, set)
   {}
 
-  virtual ~Sql_cmd_resignal() = default;
+  virtual ~Sql_cmd_resignal()
+  {}
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_RESIGNAL;
   }
 
-  bool execute(THD *thd) override;
+  virtual bool execute(THD *thd);
 };
 
 #endif

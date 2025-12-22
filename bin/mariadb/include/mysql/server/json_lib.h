@@ -1,8 +1,6 @@
 #ifndef JSON_LIB_INCLUDED
 #define JSON_LIB_INCLUDED
 
-#include <my_sys.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,7 +35,6 @@ typedef struct st_json_string_t
   const uchar *c_str;    /* Current position in JSON string */
   const uchar *str_end;  /* The end on the string. */
   my_wc_t c_next;        /* UNICODE of the last read character */
-  int c_next_len;        /* character lenght of the last read character. */
   int error;             /* error code. */
 
   CHARSET_INFO *cs;      /* Character set of the JSON string. */
@@ -51,7 +48,7 @@ void json_string_set_cs(json_string_t *s, CHARSET_INFO *i_cs);
 void json_string_set_str(json_string_t *s,
                          const uchar *str, const uchar *end);
 #define json_next_char(j) \
-  ((j)->c_next_len= (j)->wc((j)->cs, &(j)->c_next, (j)->c_str, (j)->str_end))
+  (j)->wc((j)->cs, &(j)->c_next, (j)->c_str, (j)->str_end)
 #define json_eos(j) ((j)->c_str >= (j)->str_end)
 /*
   read_string_const_chr() reads the next character of the string constant
@@ -84,9 +81,7 @@ enum json_path_step_types
   JSON_PATH_KEY_WILD= 1+4,
   JSON_PATH_KEY_DOUBLEWILD= 1+8,
   JSON_PATH_ARRAY_WILD= 2+4,
-  JSON_PATH_ARRAY_DOUBLEWILD= 2+8,
-  JSON_PATH_NEGATIVE_INDEX= 16,
-  JSON_PATH_ARRAY_RANGE= 32
+  JSON_PATH_ARRAY_DOUBLEWILD= 2+8
 };
 
 
@@ -96,8 +91,7 @@ typedef struct st_json_path_step_t
                                    /* see json_path_step_types */
   const uchar *key; /* Pointer to the beginning of the key. */
   const uchar *key_end;  /* Pointer to the end of the key. */
-  int n_item;  /* Item number in an array. No meaning for the key step. */
-  int n_item_end; /* Last index of the range. */
+  uint n_item;      /* Item number in an array. No meaning for the key step. */
 } json_path_step_t;
 
 
@@ -178,7 +172,7 @@ enum json_states {
 
 enum json_value_types
 {
-  JSON_VALUE_UNINITIALIZED=0,
+  JSON_VALUE_UNINITALIZED=0,
   JSON_VALUE_OBJECT=1,
   JSON_VALUE_ARRAY=2,
   JSON_VALUE_STRING=3,
@@ -228,7 +222,6 @@ typedef struct st_json_engine_t
 
   int stack[JSON_DEPTH_LIMIT]; /* Keeps the stack of nested JSON structures. */
   int stack_p;                 /* The 'stack' pointer. */
-  volatile uchar *killed_ptr;
 } json_engine_t;
 
 
@@ -360,7 +353,7 @@ int json_skip_level_and_count(json_engine_t *j, int *n_items_skipped);
 */
 int json_find_path(json_engine_t *je,
                    json_path_t *p, json_path_step_t **p_cur_step,
-                   int *array_counters);
+                   uint *array_counters);
 
 
 typedef struct st_json_find_paths_t
@@ -369,7 +362,7 @@ typedef struct st_json_find_paths_t
   json_path_t *paths;
   uint cur_depth;
   uint *path_depths;
-  int array_counters[JSON_DEPTH_LIMIT];
+  uint array_counters[JSON_DEPTH_LIMIT];
 } json_find_paths_t;
 
 
@@ -378,31 +371,24 @@ int json_find_paths_first(json_engine_t *je, json_find_paths_t *state,
 int json_find_paths_next(json_engine_t *je, json_find_paths_t *state);
 
 
-#define JSON_ERROR_OUT_OF_SPACE  (-1)
-#define JSON_ERROR_ILLEGAL_SYMBOL (-2)
-
 /*
-  Convert JSON string constant into ordinary string constant
+  Converst JSON string constant into ordinary string constant
   which can involve unpacking json escapes and changing character set.
   Returns negative integer in the case of an error,
   the length of the result otherwise.
 */
-int __attribute__((warn_unused_result)) json_unescape(CHARSET_INFO *json_cs,
+int json_unescape(CHARSET_INFO *json_cs,
                   const uchar *json_str, const uchar *json_end,
                   CHARSET_INFO *res_cs,
                   uchar *res, uchar *res_end);
 
 /*
-  Convert a string constant into JSON string constant.
-  This can involve appropriate escaping and changing the character set.
-  Returns the length of the result on success,
-  on error returns a negative error code.
-  Some error codes:
-    JSON_ERROR_OUT_OF_SPACE    Not enough space in the provided buffer
-    JSON_ERROR_ILLEGAL_SYMBOL  Source symbol cannot be represented in JSON
+  Converst ordinary string constant into JSON string constant.
+  which can involve appropriate escaping and changing character set.
+  Returns negative integer in the case of an error,
+  the length of the result otherwise.
 */
-int  __attribute__((warn_unused_result)) json_escape(CHARSET_INFO *str_cs,
-		const uchar *str, const uchar *str_end,
+int json_escape(CHARSET_INFO *str_cs, const uchar *str, const uchar *str_end,
                 CHARSET_INFO *json_cs, uchar *json, uchar *json_end);
 
 
@@ -430,8 +416,13 @@ int json_get_path_start(json_engine_t *je, CHARSET_INFO *i_cs,
 
 int json_get_path_next(json_engine_t *je, json_path_t *p);
 
+
+int json_path_parts_compare(
+        const json_path_step_t *a, const json_path_step_t *a_end,
+        const json_path_step_t *b, const json_path_step_t *b_end,
+        enum json_value_types vt);
 int json_path_compare(const json_path_t *a, const json_path_t *b,
-                      enum json_value_types vt, const int* array_size_counter);
+                      enum json_value_types vt);
 
 int json_valid(const char *js, size_t js_len, CHARSET_INFO *cs);
 
@@ -439,16 +430,6 @@ int json_locate_key(const char *js, const char *js_end,
                     const char *kname,
                     const char **key_start, const char **key_end,
                     int *comma_pos);
-
-int json_normalize(DYNAMIC_STRING *result,
-                   const char *s, size_t size, CHARSET_INFO *cs);
-
-int json_skip_array_and_count(json_engine_t *j, int* n_item);
-
-inline static int json_scan_ended(json_engine_t *j)
-{
-  return (j->state == JST_ARRAY_END && j->stack_p == 0);
-}
 
 #ifdef  __cplusplus
 }

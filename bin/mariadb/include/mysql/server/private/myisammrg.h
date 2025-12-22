@@ -14,7 +14,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
-/* This file should be included when using merge_isam_functions */
+/* This file should be included when using merge_isam_funktions */
 
 #ifndef _myisammrg_h
 #define _myisammrg_h
@@ -51,7 +51,7 @@ typedef struct st_mymerge_info		/* Struct from h_info */
   ulonglong data_file_length;
   ulonglong dupp_key_pos;               /* Offset of the Duplicate key in the merge table */
   uint	reclength;			/* Recordlength */
-  int	errkey;				/* With key was duplicated on err */
+  int	errkey;				/* With key was dupplicated on err */
   uint	options;			/* HA_OPTION_... used */
   ulong *rec_per_key;			/* for sql optimizing */
 } MYMERGE_INFO;
@@ -71,7 +71,6 @@ typedef struct st_myrg_info
   ulong  cache_size;
   uint	 merge_insert_method;
   uint	 tables,options,reclength,keys;
-  uint   key_parts;
   my_bool cache_in_use;
   /* If MERGE children attached to parent. See top comment in ha_myisammrg.cc */
   my_bool children_attached;

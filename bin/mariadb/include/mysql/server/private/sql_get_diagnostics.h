@@ -39,12 +39,12 @@ public:
     : m_info(info)
   {}
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_GET_DIAGNOSTICS;
   }
 
-  bool execute(THD *thd) override;
+  virtual bool execute(THD *thd);
 
 private:
   /** The information to be obtained. */
@@ -223,7 +223,7 @@ public:
   {}
 
   /** Obtain statement information in the context of a diagnostics area. */
-  bool aggregate(THD *thd, const Diagnostics_area *da) override;
+  bool aggregate(THD *thd, const Diagnostics_area *da);
 
 private:
   /* List of statement information items. */
@@ -254,8 +254,7 @@ public:
     CURSOR_NAME,
     MESSAGE_TEXT,
     MYSQL_ERRNO,
-    RETURNED_SQLSTATE,
-    ROW_NUMBER
+    RETURNED_SQLSTATE
   };
 
   /**
@@ -302,7 +301,7 @@ public:
   {}
 
   /** Obtain condition information in the context of a diagnostics area. */
-  bool aggregate(THD *thd, const Diagnostics_area *da) override;
+  bool aggregate(THD *thd, const Diagnostics_area *da);
 
 private:
   /**

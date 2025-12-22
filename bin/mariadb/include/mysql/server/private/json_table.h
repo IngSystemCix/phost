@@ -140,28 +140,26 @@ public:
   {
   public:
     Json_table_column::enum_on_response m_response;
-    Item *m_default;
+    LEX_CSTRING m_default;
     int respond(Json_table_column *jc, Field *f, uint error_num);
     int print(const char *name, String *str) const;
     bool specified() const { return m_response != RESPONSE_NOT_SPECIFIED; }
   };
 
   enum_type m_column_type;
-  bool m_format_json;
   json_path_t m_path;
   On_response m_on_error;
   On_response m_on_empty;
   Create_field *m_field;
   Json_table_nested_path *m_nest;
   CHARSET_INFO *m_explicit_cs;
+  CHARSET_INFO *m_defaults_cs;
 
   void set(enum_type ctype)
   {
     m_column_type= ctype;
   }
-  int set(THD *thd, enum_type ctype, const LEX_CSTRING &path, CHARSET_INFO *cs);
-  int set(THD *thd, enum_type ctype, const LEX_CSTRING &path,
-          const Lex_column_charset_collation_attrs_st &cl);
+  int set(THD *thd, enum_type ctype, const LEX_CSTRING &path);
   Json_table_column(Create_field *f, Json_table_nested_path *nest) :
     m_field(f), m_nest(nest), m_explicit_cs(NULL)
   {
@@ -262,6 +260,9 @@ public:
   /* SQL Parser: current column in JSON_TABLE (...) syntax */
   Json_table_column *m_cur_json_table_column;
 
+  /* SQL Parser: charset of the current text literal */
+  CHARSET_INFO *m_text_literal_cs;
+
 private:
   /* Context to be used for resolving the first argument. */
   Name_resolution_context *m_context;
@@ -284,7 +285,7 @@ bool push_table_function_arg_context(LEX *lex, MEM_ROOT *alloc);
 TABLE *create_table_for_function(THD *thd, TABLE_LIST *sql_table);
 
 table_map add_table_function_dependencies(List<TABLE_LIST> *join_list,
-                                          table_map nest_tables, bool *error);
+                                          table_map nest_tables);
 
 #endif /* JSON_TABLE_INCLUDED */
 

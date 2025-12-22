@@ -23,7 +23,6 @@
 #include "sql_priv.h"
 #include "rpl_mi.h"
 #include "mysql.h"
-#include <sql_common.h>
 
 class Master_info;
 
@@ -33,8 +32,8 @@ class Master_info;
 class Repl_semi_sync_slave
   :public Repl_semi_sync_base {
 public:
-  Repl_semi_sync_slave() :m_slave_enabled(false) {}
-  ~Repl_semi_sync_slave() = default;
+ Repl_semi_sync_slave() :m_slave_enabled(false) {}
+  ~Repl_semi_sync_slave() {}
 
   void set_trace_level(unsigned long trace_level) {
     m_trace_level = trace_level;
@@ -45,7 +44,7 @@ public:
    */
   int init_object();
 
-  inline bool get_slave_enabled() {
+  bool get_slave_enabled() {
     return m_slave_enabled;
   }
 
@@ -53,7 +52,7 @@ public:
     m_slave_enabled = enabled;
   }
 
-  inline bool is_delay_master(){
+  bool is_delay_master(){
     return m_delay_master;
   }
 
@@ -88,23 +87,24 @@ public:
    * binlog position.
    */
   int slave_reply(Master_info* mi);
-  void slave_start(Master_info *mi);
-  void slave_stop(Master_info *mi);
-  void slave_reconnect(Master_info *mi);
-  int request_transmit(Master_info *mi);
-  void kill_connection(Master_info *mi);
+  int slave_start(Master_info *mi);
+  int slave_stop(Master_info *mi);
+  int request_transmit(Master_info*);
+  void kill_connection(MYSQL *mysql);
+  int reset_slave(Master_info *mi);
 
 private:
   /* True when init_object has been called */
   bool m_init_done;
-  bool m_slave_enabled;        /* semi-sync is enabled on the slave */
+  bool m_slave_enabled;        /* semi-sycn is enabled on the slave */
   bool m_delay_master;
   unsigned int m_kill_conn_timeout;
 };
 
 
 /* System and status variables for the slave component */
-extern my_bool global_rpl_semi_sync_slave_enabled;
+extern my_bool rpl_semi_sync_slave_enabled;
+extern my_bool rpl_semi_sync_slave_status;
 extern ulong rpl_semi_sync_slave_trace_level;
 extern Repl_semi_sync_slave repl_semisync_slave;
 
@@ -112,7 +112,4 @@ extern char rpl_semi_sync_slave_delay_master;
 extern unsigned int rpl_semi_sync_slave_kill_conn_timeout;
 extern unsigned long long rpl_semi_sync_slave_send_ack;
 
-extern int rpl_semi_sync_enabled(THD *thd, SHOW_VAR *var, void *buff,
-                                 system_status_var *status_var,
-                                 enum_var_type scope);
 #endif /* SEMISYNC_SLAVE_H */

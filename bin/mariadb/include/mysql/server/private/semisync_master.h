@@ -30,9 +30,7 @@ extern PSI_cond_key key_COND_binlog_send;
 
 struct Tranx_node {
   char              log_name[FN_REFLEN];
-  bool              thd_valid;             /* thd is valid for signalling */
   my_off_t          log_pos;
-  THD               *thd;                   /* The thread awaiting an ACK */
   struct Tranx_node *next;            /* the next node in the sorted list */
   struct Tranx_node *hash_next;    /* the next node during hash collision */
 };
@@ -127,9 +125,7 @@ public:
 
     trx_node= &(current_block->nodes[++last_node]);
     trx_node->log_name[0] = '\0';
-    trx_node->thd_valid= false;
     trx_node->log_pos= 0;
-    trx_node->thd= nullptr;
     trx_node->next= 0;
     trx_node->hash_next= 0;
     return trx_node;
@@ -293,19 +289,6 @@ private:
 };
 
 /**
-  Function pointer type to run on the contents of an Active_tranx node.
-
-  Return 0 for success, 1 for error.
-
-  Note Repl_semi_sync_master::LOCK_binlog is not guaranteed to be held for
-  its invocation. See the context in which it is called to know.
-*/
-
-typedef int (*active_tranx_action)(THD *trx_thd, bool thd_valid,
-                                   const char *log_file_name,
-                                   my_off_t trx_log_file_pos);
-
-/**
    This class manages memory for active transaction list.
 
    We record each active transaction with a Tranx_node, each session
@@ -325,7 +308,6 @@ private:
 
   int              m_num_entries;              /* maximum hash table entries */
   mysql_mutex_t *m_lock;                                     /* mutex lock */
-  mysql_cond_t  *m_cond_empty;    /* signalled when cleared all Tranx_node */
 
   inline void assert_lock_owner();
 
@@ -348,8 +330,7 @@ private:
   }
 
 public:
-  Active_tranx(mysql_mutex_t *lock, mysql_cond_t *cond,
-               unsigned long trace_level);
+  Active_tranx(mysql_mutex_t *lock, unsigned long trace_level);
   ~Active_tranx();
 
   /* Insert an active transaction node with the specified position.
@@ -357,36 +338,15 @@ public:
    * Return:
    *  0: success;  non-zero: error
    */
-  int insert_tranx_node(THD *thd_to_wait, const char *log_file_name,
-                        my_off_t log_file_pos);
+  int insert_tranx_node(const char *log_file_name, my_off_t log_file_pos);
 
   /* Clear the active transaction nodes until(inclusive) the specified
    * position.
    * If log_file_name is NULL, everything will be cleared: the sorted
    * list and the hash table will be reset to empty.
-   *
-   * The pre_delete_hook parameter is a function pointer that will be invoked
-   * for each Active_tranx node, in order, from m_trx_front to m_trx_rear,
-   * e.g. to signal their wakeup condition. Repl_semi_sync_binlog::LOCK_binlog
-   * is held while this is invoked.
    */
   void clear_active_tranx_nodes(const char *log_file_name,
-                                my_off_t log_file_pos,
-                                active_tranx_action pre_delete_hook);
-
-  /* Unlinks a thread from a Tranx_node, so it will not be referenced/signalled
-   * if it is separately killed. Note that this keeps the Tranx_node itself in
-   * the cache so it can still be awaited by await_all_slave_replies(), e.g.
-   * as is done by SHUTDOWN WAIT FOR ALL SLAVES.
-   */
-  void unlink_thd_as_waiter(const char *log_file_name, my_off_t log_file_pos);
-
-  /* Uses DBUG_ASSERT statements to ensure that the argument thd_to_check
-   * matches the thread of the respective Tranx_node::thd of the passed in
-   * log_file_name and log_file_pos.
-   */
-  Tranx_node * is_thd_waiter(THD *thd_to_check, const char *log_file_name,
-                             my_off_t log_file_pos);
+                               my_off_t    log_file_pos);
 
   /* Given a position, check to see whether the position is an active
    * transaction's ending position by probing the hash table.
@@ -398,12 +358,6 @@ public:
    */
   static int compare(const char *log_file_name1, my_off_t log_file_pos1,
                      const char *log_file_name2, my_off_t log_file_pos2);
-
-
-  /* Check if there are no transactions actively awaiting ACKs. Returns true
-   * if the internal linked list has no entries, false otherwise.
-   */
-  bool is_empty() { return m_trx_front == NULL; }
 
 };
 
@@ -479,6 +433,8 @@ class Repl_semi_sync_master
 
   void lock();
   void unlock();
+  void cond_broadcast();
+  int  cond_timewait(struct timespec *wait_time);
 
   /* Is semi-sync replication on? */
   bool is_on() {
@@ -498,7 +454,7 @@ class Repl_semi_sync_master
 
  public:
   Repl_semi_sync_master();
-  ~Repl_semi_sync_master() = default;
+  ~Repl_semi_sync_master() {}
 
   void cleanup();
 
@@ -515,24 +471,6 @@ class Repl_semi_sync_master
   void set_wait_timeout(unsigned long wait_timeout) {
     m_wait_timeout = wait_timeout;
   }
-
-  /*
-    Calculates a timeout that is m_wait_timeout after start_arg and saves it
-    in out. If start_arg is NULL, the timeout is m_wait_timeout after the
-    current system time.
-  */
-  void create_timeout(struct timespec *out, struct timespec *start_arg);
-
-  /*
-    Blocks the calling thread until the ack_receiver either receives ACKs for
-    all transactions awaiting ACKs, or times out (from
-    rpl_semi_sync_master_timeout).
-
-    If info_msg is provided, it will be output via sql_print_information when
-    there are transactions awaiting ACKs; info_msg is not output if there are
-    no transasctions to await.
-  */
-  void await_all_slave_replies(const char *msg);
 
   /*set the ACK point, after binlog sync or after transaction commit*/
   void set_wait_point(unsigned long ack_point)
@@ -608,23 +546,9 @@ class Repl_semi_sync_master
 
   /*Wait after the transaction is rollback*/
   int wait_after_rollback(THD *thd, bool all);
-  /* Store the current binlog position in m_active_tranxs. This position should
-   * be acked by slave.
-   *
-   * Inputs:
-   *   trans_thd  Thread of the transaction which is executing the
-   *              transaction.
-   *   waiter_thd Thread that will wait for the ACK from the replica,
-   *              which depends on the semi-sync wait point. If AFTER_SYNC,
-   *              and also using binlog group commit, this will be the leader
-   *              thread of the binlog commit. Otherwise, it is the thread that
-   *              is executing the transaction, i.e. the same as trans_thd.
-   *   log_file   Name of the binlog file that the transaction is written into
-   *   log_pos    Offset within the binlog file that the transaction is written
-   *              at
-   */
-  int report_binlog_update(THD *trans_thd, THD *waiter_thd,
-                           const char *log_file, my_off_t log_pos);
+  /*Store the current binlog position in m_active_tranxs. This position should
+   * be acked by slave*/
+  int report_binlog_update(THD *thd, const char *log_file,my_off_t log_pos);
 
   int dump_start(THD* thd,
                   const char *log_file,
@@ -670,19 +594,13 @@ class Repl_semi_sync_master
    *    semi-sync is on
    *
    * Input:  (the transaction events' ending binlog position)
-   *  THD           - (IN)  thread that will wait for an ACK. This can be the
-   *                        binlog leader thread when using wait_point
-   *                        AFTER_SYNC with binlog group commit. In all other
-   *                        cases, this is the user thread executing the
-   *                        transaction.
    *  log_file_name - (IN)  transaction ending position's file name
    *  log_file_pos  - (IN)  transaction ending position's file offset
    *
    * Return:
    *  0: success;  non-zero: error
    */
-  int write_tranx_in_binlog(THD *thd, const char *log_file_name,
-                            my_off_t log_file_pos);
+  int write_tranx_in_binlog(const char* log_file_name, my_off_t log_file_pos);
 
   /* Read the slave's reply so that we know how much progress the slave makes
    * on receive replication events.
@@ -691,7 +609,6 @@ class Repl_semi_sync_master
 
   /* Export internal statistics for semi-sync replication. */
   void set_export_stats();
-  void reset_stats();
 
   /* 'reset master' command is issued from the user and semi-sync need to
    * go off for that.
@@ -700,6 +617,8 @@ class Repl_semi_sync_master
 
   /*called before reset master*/
   int before_reset_master();
+
+  void check_and_switch();
 
   mysql_mutex_t LOCK_rpl_semi_sync_master_enabled;
 };

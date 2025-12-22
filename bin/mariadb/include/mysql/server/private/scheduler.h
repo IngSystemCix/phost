@@ -21,6 +21,10 @@
   Classes for the thread scheduler
 */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface
+#endif
+
 class THD;
 
 /* Functions used when manipulating threads */

@@ -56,11 +56,8 @@ public:
   bool using_pq;
   /* 
     TRUE means sort operation must produce table rowids. 
-    FALSE means that it also has an option of producing {sort_key, addon_fields}
-          pairs.
-
-    Usually initialized with value of join_tab->keep_current_rowid to allow for
-    a call to table->file->position() using these table rowids.
+    FALSE means that it halso has an option of producing {sort_key,
+    addon_fields} pairs.
   */
   bool sort_positions;
   /*
@@ -160,7 +157,7 @@ public:
     Also how many rows in record_pointers, if used
   */
   ha_rows   return_rows;
-  ha_rows   m_examined_rows;    /* How many rows read. Already in thd */
+  ha_rows   examined_rows;	/* How many rows read */
   ha_rows   found_rows;         /* How many rows was accepted */
 
   /** Sort filesort_buffer */

@@ -20,13 +20,13 @@
 
 /* This file is originally from the mysql distribution. Coded by monty */
 
-#include <my_global.h>
-#include <cmath>
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class implementation */
+#endif
 
 #include "m_ctype.h"                            /* my_charset_bin */
 #include <my_sys.h>              /* alloc_root, my_free, my_realloc */
 #include "m_string.h"                           /* TRASH */
-#include "sql_const.h"
 #include "sql_list.h"
 
 class String;
@@ -53,6 +53,48 @@ inline uint32 copy_and_convert(char *to, size_t to_length, CHARSET_INFO *to_cs,
   return my_convert(to, (uint)to_length, to_cs, from, (uint)from_length,
                     from_cs, errors);
 }
+
+
+class String_copy_status: protected MY_STRCOPY_STATUS
+{
+public:
+  const char *source_end_pos() const
+  { return m_source_end_pos; }
+  const char *well_formed_error_pos() const
+  { return m_well_formed_error_pos; }
+};
+
+
+class Well_formed_prefix_status: public String_copy_status
+{
+public:
+  Well_formed_prefix_status(CHARSET_INFO *cs,
+                            const char *str, const char *end, size_t nchars)
+  { cs->well_formed_char_length(str, end, nchars, this); }
+};
+
+
+class Well_formed_prefix: public Well_formed_prefix_status
+{
+  const char *m_str; // The beginning of the string
+public:
+  Well_formed_prefix(CHARSET_INFO *cs, const char *str, const char *end,
+                     size_t nchars)
+   :Well_formed_prefix_status(cs, str, end, nchars), m_str(str)
+  { }
+  Well_formed_prefix(CHARSET_INFO *cs, const char *str, size_t length,
+                     size_t nchars)
+   :Well_formed_prefix_status(cs, str, str + length, nchars), m_str(str)
+  { }
+  Well_formed_prefix(CHARSET_INFO *cs, const char *str, size_t length)
+   :Well_formed_prefix_status(cs, str, str + length, length), m_str(str)
+  { }
+  Well_formed_prefix(CHARSET_INFO *cs, LEX_CSTRING str, size_t nchars)
+   :Well_formed_prefix_status(cs, str.str, str.str + str.length, nchars),
+    m_str(str.str)
+  { }
+  size_t length() const { return m_source_end_pos - m_str; }
+};
 
 
 class String_copier: public String_copy_status,
@@ -157,87 +199,6 @@ public:
   LEX_CSTRING collation_specific_name() const;
   bool encoding_allows_reinterpret_as(CHARSET_INFO *cs) const;
   bool eq_collation_specific_names(CHARSET_INFO *cs) const;
-  bool can_have_collate_clause() const
-  {
-    return m_charset != &my_charset_bin;
-  }
-
-  /*
-    The MariaDB version when the last collation change happened,
-    e.g. due to a bug fix. See functions below.
-  */
-  static ulong latest_mariadb_version_with_collation_change()
-  {
-    return 110002;
-  }
-
-  /*
-    Check if the collation with the given ID changed its order
-    since the given MariaDB version.
-  */
-  static bool collation_changed_order(ulong mysql_version, uint cs_number)
-  {
-    if ((mysql_version < 50048 &&
-           (cs_number == 11 || /* ascii_general_ci - bug #29499, bug #27562 */
-            cs_number == 41 || /* latin7_general_ci - bug #29461 */
-            cs_number == 42 || /* latin7_general_cs - bug #29461 */
-            cs_number == 20 || /* latin7_estonian_cs - bug #29461 */
-            cs_number == 21 || /* latin2_hungarian_ci - bug #29461 */
-            cs_number == 22 || /* koi8u_general_ci - bug #29461 */
-            cs_number == 23 || /* cp1251_ukrainian_ci - bug #29461 */
-            cs_number == 26)) || /* cp1250_general_ci - bug #29461 */
-           (mysql_version < 50124 &&
-           (cs_number == 33 || /* utf8mb3_general_ci - bug #27877 */
-            cs_number == 35))) /* ucs2_general_ci - bug #27877 */
-        return true;
-
-    if (cs_number == 159 && /* ucs2_general_mysql500_ci - MDEV-30746 */
-        ((mysql_version >= 100400 && mysql_version < 100429) ||
-         (mysql_version >= 100500 && mysql_version < 100520) ||
-         (mysql_version >= 100600 && mysql_version < 100613) ||
-         (mysql_version >= 100700 && mysql_version < 100708) ||
-         (mysql_version >= 100800 && mysql_version < 100808) ||
-         (mysql_version >= 100900 && mysql_version < 100906) ||
-         (mysql_version >= 101000 && mysql_version < 101004) ||
-         (mysql_version >= 101100 && mysql_version < 101103) ||
-         (mysql_version >= 110000 && mysql_version < 110002)))
-      return true;
-    return false;
-  }
-
-  /**
-     Check if a collation has changed ID since the given version.
-     Return the new ID.
-
-     @param mysql_version
-     @param cs_number     - collation ID
-
-     @retval the new collation ID (or cs_number, if no change)
-  */
-
-  static uint upgrade_collation_id(ulong mysql_version, uint cs_number)
-  {
-    if (mysql_version >= 50300 && mysql_version <= 50399)
-    {
-      switch (cs_number) {
-      case 149: return MY_PAGE2_COLLATION_ID_UCS2;   // ucs2_crotian_ci
-      case 213: return MY_PAGE2_COLLATION_ID_UTF8;   // utf8_crotian_ci
-      }
-    }
-    if ((mysql_version >= 50500 && mysql_version <= 50599) ||
-        (mysql_version >= 100000 && mysql_version <= 100005))
-    {
-      switch (cs_number) {
-      case 149: return MY_PAGE2_COLLATION_ID_UCS2;   // ucs2_crotian_ci
-      case 213: return MY_PAGE2_COLLATION_ID_UTF8;   // utf8_crotian_ci
-      case 214: return MY_PAGE2_COLLATION_ID_UTF32;  // utf32_croatian_ci
-      case 215: return MY_PAGE2_COLLATION_ID_UTF16;  // utf16_croatian_ci
-      case 245: return MY_PAGE2_COLLATION_ID_UTF8MB4;// utf8mb4_croatian_ci
-      }
-    }
-    return cs_number;
-  }
-
 };
 
 
@@ -364,10 +325,9 @@ public:
   }
 
   // Returns offset to substring or -1
-  int strstr(const Binary_string &search, uint32 offset=0) const;
-  int strstr(const char *search, uint32 search_length, uint32 offset=0) const;
+  int strstr(const Binary_string &search, uint32 offset=0);
   // Returns offset to substring or -1
-  int strrstr(const Binary_string &search, uint32 offset=0) const;
+  int strrstr(const Binary_string &search, uint32 offset=0);
 
   /*
     The following append operations do not extend the strings and in production
@@ -404,19 +364,6 @@ public:
     float8store(Ptr + str_length, *d);
     str_length += 8;
   }
-  /*
-    Append a wide character.
-    The caller must have allocated at least cs->mbmaxlen bytes.
-  */
-  int q_append_wc(my_wc_t wc, CHARSET_INFO *cs)
-  {
-    int mblen;
-    if ((mblen= cs->cset->wc_mb(cs, wc,
-                                (uchar *) end(),
-                                (uchar *) end() + cs->mbmaxlen)) > 0)
-      str_length+= (uint32) mblen;
-    return mblen;
-  }
   void q_append(const char *data, size_t data_len)
   {
     ASSERT_LENGTH(data_len);
@@ -448,7 +395,6 @@ public:
   }
   void qs_append(const char *str, size_t len);
   void qs_append_hex(const char *str, uint32 len);
-  void qs_append_hex_uint32(uint32 num);
   void qs_append(double d);
   void qs_append(const double *d);
   inline void qs_append(const char c)
@@ -538,12 +484,7 @@ public:
     if (str.Alloced_length)
       Alloced_length= (uint32) (str.Alloced_length - offset);
   }
-  LEX_CSTRING to_lex_cstring() const
-  {
-    LEX_CSTRING tmp= {Ptr, str_length};
-    return tmp;
-  }
-  inline LEX_CSTRING *get_value(LEX_CSTRING *res) const
+  inline LEX_CSTRING *get_value(LEX_CSTRING *res)
   {
     res->str=    Ptr;
     res->length= str_length;
@@ -664,13 +605,7 @@ public:
     }
     return false;
   }
-  bool append_hex_uint32(uint32 num)
-  {
-    if (reserve(8))
-      return true;
-    qs_append_hex_uint32(num);
-    return false;
-  }
+
   bool append_with_step(const char *s, uint32 arg_length, uint32 step_alloc)
   {
     uint32 new_length= arg_length + str_length;
@@ -708,7 +643,7 @@ public:
       Ptr[str_length]=0;
       return Ptr;
     }
-    (void) realloc(str_length);               /* This will add end \0 */
+    (void) realloc(str_length+1);               /* This will add end \0 */
     return Ptr;
   }
   /*
@@ -731,7 +666,7 @@ public:
     if (Ptr && str_length < Alloced_length)
       Ptr[str_length]=0;
     else
-      (void) realloc(str_length);
+      (void) realloc(str_length + 1);
     return Ptr;
   }
 
@@ -755,7 +690,7 @@ public:
 
       Note that if arg_length == Alloced_length then we don't allocate.
       This ensures we don't do any extra allocations in protocol and String:int,
-      but the string will not be automatically null terminated if c_ptr() is not
+      but the string will not be atomically null terminated if c_ptr() is not
       called.
     */
     if (arg_length <= Alloced_length && Alloced_length)
@@ -852,7 +787,7 @@ public:
 class String: public Charset, public Binary_string
 {
 public:
-  String() = default;
+  String() { }
   String(size_t length_arg) :Binary_string(length_arg)
   { }
   /*
@@ -866,9 +801,9 @@ public:
   String(char *str, size_t len, CHARSET_INFO *cs)
    :Charset(cs), Binary_string(str, len)
   { }
-  String(const String &str) = default;
-  String(String &&str) noexcept
-   :Charset(std::move(str)), Binary_string(std::move(str)){}
+  String(const String &str)
+   :Charset(str), Binary_string(str)
+  { }
 
   void set(String &str,size_t offset,size_t arg_length)
   {
@@ -899,11 +834,7 @@ public:
   bool set(ulong num, CHARSET_INFO *cs) { return set_int(num, true, cs); }
   bool set(longlong num, CHARSET_INFO *cs) { return set_int(num, false, cs); }
   bool set(ulonglong num, CHARSET_INFO *cs) { return set_int((longlong)num, true, cs); }
-  bool set_real_with_type(double num, uint decimals, CHARSET_INFO *cs, my_gcvt_arg_type);
-  bool set_real(double num,uint decimals, CHARSET_INFO *cs)
-  { return set_real_with_type(num,decimals,cs,MY_GCVT_ARG_DOUBLE); }
-  bool set_real(float num,uint decimals, CHARSET_INFO *cs)
-  { return set_real_with_type(num,decimals,cs,MY_GCVT_ARG_FLOAT); }
+  bool set_real(double num,uint decimals, CHARSET_INFO *cs);
   bool set_fcvt(double num, uint decimals)
   {
     set_charset(&my_charset_latin1);
@@ -994,30 +925,11 @@ public:
     set_charset(tocs);
     return false;
   }
-  bool copy_casedn(CHARSET_INFO *cs, const LEX_CSTRING &str)
-  {
-    size_t nbytes= str.length * cs->casedn_multiply();
-    DBUG_ASSERT(nbytes + 1 <= UINT_MAX32);
-    if (alloc(nbytes))
-      return true;
-    str_length= (uint32) cs->casedn_z(str.str, str.length, Ptr, nbytes + 1);
-    return false;
-  }
-  bool copy_caseup(CHARSET_INFO *cs, const LEX_CSTRING &str)
-  {
-    size_t nbytes= str.length * cs->caseup_multiply();
-    DBUG_ASSERT(nbytes + 1 <= UINT_MAX32);
-    if (alloc(nbytes))
-      return true;
-    str_length= (uint32) cs->caseup_z(str.str, str.length, Ptr, nbytes + 1);
-    return false;
-  }
   // Append without character set conversion
   bool append(const String &s)
   {
     return Binary_string::append(s);
   }
-
   inline bool append(char chr)
   {
     return Binary_string::append_char(chr);
@@ -1048,6 +960,13 @@ public:
   }
 
   // Append with optional character set conversion from ASCII (e.g. to UCS2)
+  bool append(const LEX_STRING *ls)
+  {
+    DBUG_ASSERT(ls->length < UINT_MAX32 &&
+                ((ls->length == 0 && !ls->str) ||
+                 ls->length == strlen(ls->str)));
+    return append(ls->str, (uint32) ls->length);
+  }
   bool append(const LEX_CSTRING *ls)
   {
     DBUG_ASSERT(ls->length < UINT_MAX32 &&
@@ -1059,18 +978,9 @@ public:
   {
     return append(&ls);
   }
-  bool append_name_value(const LEX_CSTRING &name,
-                         const LEX_CSTRING &value,
-                         uchar quot= '\0')
-  {
-    return
-      append(name) ||
-      append('=') ||
-      (quot && append(quot)) ||
-      append(value) ||
-      (quot && append(quot));
-  }
   bool append(const char *s, size_t size);
+  bool append_with_prefill(const char *s, uint32 arg_length,
+			   uint32 full_length, char fill_char);
   bool append_parenthesized(long nr, int radix= 10);
 
   // Append with optional character set conversion from cs to charset()
@@ -1078,62 +988,6 @@ public:
   bool append(const LEX_CSTRING &s, CHARSET_INFO *cs)
   {
     return append(s.str, s.length, cs);
-  }
-
-  // Append a wide character
-  bool append_wc(my_wc_t wc)
-  {
-    if (reserve(mbmaxlen()))
-      return true;
-    int mblen= q_append_wc(wc, charset());
-    if (mblen > 0)
-      return false;
-    else if (mblen == MY_CS_ILUNI && wc != '?')
-      return q_append_wc('?', charset()) <= 0;
-    return true;
-  }
-
-  // Append a number with zero prefilling
-  bool append_zerofill(uint num, uint width)
-  {
-    static const char zeros[15]= "00000000000000";
-    char intbuff[15];
-    uint length= (uint) (int10_to_str(num, intbuff, 10) - intbuff);
-    if (length < width &&
-        append(zeros, width - length, &my_charset_latin1))
-      return true;
-    return append(intbuff, length, &my_charset_latin1);
-  }
-
-  /*
-    Append a bitmask in an uint32 with a translation into a
-    C-style human readable representation, e.g.:
-      0x05 -> "(flag04|flag01)"
-
-    @param flags  - the flags to translate
-    @param names  - an array of flag names
-    @param count  - the number of available elements in "names"
-  */
-  bool append_flag32_names(uint32 flags, LEX_CSTRING names[], size_t count)
-  {
-    bool added= false;
-    if (flags && append('('))
-      return true;
-    for (ulong i= 0; i <= 31; i++)
-    {
-      ulong bit= 31 - i;
-      if (flags & (1 << bit))
-      {
-        if (added && append('|'))
-          return true;
-        if (bit < count ? append(names[bit]) : append('?'))
-          return true;
-        added= true;
-      }
-    }
-    if (flags && append(')'))
-      return true;
-    return false;
   }
 
   void strip_sp();
@@ -1162,43 +1016,6 @@ public:
       print(to);
     else
       print_with_conversion(to, cs);
-  }
-
-  static my_wc_t escaped_wc_for_single_quote(my_wc_t ch)
-  {
-    switch (ch) {
-    case '\\':   return '\\';
-    case '\0':   return '0';
-    case '\'':   return '\'';
-    case '\b':   return 'b';
-    case '\t':   return 't';
-    case '\n':   return 'n';
-    case '\r':   return 'r';
-    case '\032': return 'Z';
-    }
-    return 0;
-  }
-
-  // Append for single quote using mb_wc/wc_mb Unicode conversion
-  bool append_for_single_quote_using_mb_wc(const char *str, size_t length,
-                                           CHARSET_INFO *cs);
-
-  // Append for single quote with optional mb_wc/wc_mb conversion
-  bool append_for_single_quote_opt_convert(const char *str,
-                                           size_t length,
-                                           CHARSET_INFO *cs)
-  {
-    return charset() == &my_charset_bin || cs == &my_charset_bin  ||
-           my_charset_same(charset(), cs) ?
-           append_for_single_quote(str, length) :
-           append_for_single_quote_using_mb_wc(str, length, cs);
-  }
-
-  bool append_for_single_quote_opt_convert(const String &str)
-  {
-    return append_for_single_quote_opt_convert(str.ptr(),
-                                               str.length(),
-                                               str.charset());
   }
 
   bool append_for_single_quote(const char *st, size_t len);

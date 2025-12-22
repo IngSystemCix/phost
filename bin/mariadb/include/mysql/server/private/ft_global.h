@@ -56,6 +56,8 @@ struct _ft_vft_ext
 #define FTS_ORDERED_RESULT                (1LL << 1)
 #define FTS_DOCID_IN_RESULT               (1LL << 2)
 
+#define FTS_DOC_ID_COL_NAME "FTS_DOC_ID"
+
 #ifndef FT_CORE
 struct st_ft_info
 {
@@ -88,8 +90,7 @@ void ft_free_stopwords(void);
 
 FT_INFO *ft_init_search(uint,void *, uint, uchar *, size_t,
                         CHARSET_INFO *, uchar *);
-my_bool ft_boolean_check_syntax_string(const uchar *, size_t length,
-                                       CHARSET_INFO *cs);
+my_bool ft_boolean_check_syntax_string(const uchar *);
 
 /* Internal symbols for fulltext between maria and MyISAM */
 

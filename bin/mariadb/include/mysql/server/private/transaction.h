@@ -16,6 +16,10 @@
 #ifndef TRANSACTION_H
 #define TRANSACTION_H
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface                      /* gcc class implementation */
+#endif
+
 #include <m_string.h>
 
 class THD;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2017, Oracle and/or its affiliates. All rights reserved.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -216,7 +216,7 @@
   With the instrumentation, mysql_fclose(NULL, ...) will safely return 0,
   which is an extension compared to my_fclose and is therefore compliant.
   mysql_fclose is on purpose *not* implementing
-  @code assert(file != NULL) @endcode,
+  @code DBUG_ASSERT(file != NULL) @endcode,
   since doing so could introduce regressions.
 */
 #ifdef HAVE_PSI_FILE_INTERFACE
@@ -1018,7 +1018,7 @@ inline_mysql_file_create(
 #ifdef HAVE_PSI_FILE_INTERFACE
   PSI_file_key key, const char *src_file, uint src_line,
 #endif
-  const char *filename, mode_t create_flags, int access_flags, myf myFlags)
+  const char *filename, int create_flags, int access_flags, myf myFlags)
 {
   File file;
 #ifdef HAVE_PSI_FILE_INTERFACE
@@ -1344,7 +1344,7 @@ inline_mysql_file_create_with_symlink(
 #ifdef HAVE_PSI_FILE_INTERFACE
   PSI_file_key key, const char *src_file, uint src_line,
 #endif
-  const char *linkname, const char *filename, mode_t create_flags,
+  const char *linkname, const char *filename, int create_flags,
   int access_flags, myf flags)
 {
   File file;

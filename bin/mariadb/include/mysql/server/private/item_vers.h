@@ -18,6 +18,10 @@
 
 /* System Versioning items */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class implementation */
+#endif
+
 class Item_func_history: public Item_bool_func
 {
 public:
@@ -30,7 +34,8 @@ public:
   }
 
   bool val_bool() override;
-  bool fix_length_and_dec(THD *thd) override
+  longlong val_int() override { return val_bool(); }
+  bool fix_length_and_dec() override
   {
     set_maybe_null();
     null_value= 0;
@@ -44,7 +49,7 @@ public:
     return name;
   }
   void print(String *str, enum_query_type query_type) override;
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_history>(thd, this); }
 };
 
@@ -60,9 +65,9 @@ public:
     return (trt_field == TR_table::FLD_BEGIN_TS) ? begin_name : commit_name;
   }
   bool get_date(THD *thd, MYSQL_TIME *res, date_mode_t fuzzydate) override;
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_trt_ts>(thd, this); }
-  bool fix_length_and_dec(THD *thd) override
+  bool fix_length_and_dec() override
   { fix_attributes_datetime(decimals); return FALSE; }
 };
 
@@ -97,15 +102,15 @@ public:
     return NULL_clex_str;
   }
 
-  bool fix_length_and_dec(THD *thd) override
+  bool fix_length_and_dec() override
   {
-    bool res= Item_int_func::fix_length_and_dec(thd);
+    bool res= Item_int_func::fix_length_and_dec();
     max_length= 20;
     return res;
   }
 
   longlong val_int() override;
-  Item *do_get_copy(THD *thd) const override
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_trt_id>(thd, this); }
 };
 
@@ -121,8 +126,8 @@ public:
     static LEX_CSTRING name= {STRING_WITH_LEN("trt_trx_sees") };
     return name;
   }
-  bool val_bool() override;
-  Item *do_get_copy(THD *thd) const override
+  longlong val_int() override;
+  Item *get_copy(THD *thd) override
   { return get_item_copy<Item_func_trt_trx_sees>(thd, this); }
 };
 

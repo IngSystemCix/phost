@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2010, Oracle and/or its affiliates.
-   Copyright (c) 2008, 2022, MariaDB
+   Copyright (c) 2008-2011 Monty Program Ab
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -58,14 +58,13 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call, or NULL
   */
-  virtual Item *create_func(THD *thd, const LEX_CSTRING *name,
-                            List<Item> *item_list) = 0;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name, List<Item> *item_list) = 0;
 
 protected:
   /** Constructor */
-  Create_func() = default;
+  Create_func() {}
   /** Destructor */
-  virtual ~Create_func() = default;
+  virtual ~Create_func() {}
 };
 
 
@@ -76,8 +75,8 @@ protected:
 class Create_func_arg0 : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name,
+                            List<Item> *item_list);
 
   /**
     Builder method, with no arguments.
@@ -88,9 +87,9 @@ public:
 
 protected:
   /** Constructor. */
-  Create_func_arg0() = default;
+  Create_func_arg0() {}
   /** Destructor. */
-  virtual ~Create_func_arg0() = default;
+  virtual ~Create_func_arg0() {}
 };
 
 
@@ -101,8 +100,7 @@ protected:
 class Create_func_arg1 : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name, List<Item> *item_list);
 
   /**
     Builder method, with one argument.
@@ -114,9 +112,9 @@ public:
 
 protected:
   /** Constructor. */
-  Create_func_arg1() = default;
+  Create_func_arg1() {}
   /** Destructor. */
-  virtual ~Create_func_arg1() = default;
+  virtual ~Create_func_arg1() {}
 };
 
 
@@ -127,8 +125,7 @@ protected:
 class Create_func_arg2 : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name, List<Item> *item_list);
 
   /**
     Builder method, with two arguments.
@@ -141,9 +138,9 @@ public:
 
 protected:
   /** Constructor. */
-  Create_func_arg2() = default;
+  Create_func_arg2() {}
   /** Destructor. */
-  virtual ~Create_func_arg2() = default;
+  virtual ~Create_func_arg2() {}
 };
 
 
@@ -154,8 +151,7 @@ protected:
 class Create_func_arg3 : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name, List<Item> *item_list);
 
   /**
     Builder method, with three arguments.
@@ -169,9 +165,9 @@ public:
 
 protected:
   /** Constructor. */
-  Create_func_arg3() = default;
+  Create_func_arg3() {}
   /** Destructor. */
-  virtual ~Create_func_arg3() = default;
+  virtual ~Create_func_arg3() {}
 };
 
 
@@ -188,8 +184,8 @@ protected:
 class Create_native_func : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name,
+                            List<Item> *item_list);
 
   /**
     Builder method, with no arguments.
@@ -198,14 +194,14 @@ public:
     @param item_list The function parameters, none of which are named
     @return An item representing the function call
   */
-  virtual Item *create_native(THD *thd, const LEX_CSTRING *name,
+  virtual Item *create_native(THD *thd, LEX_CSTRING *name,
                               List<Item> *item_list) = 0;
 
 protected:
   /** Constructor. */
-  Create_native_func() = default;
+  Create_native_func() {}
   /** Destructor. */
-  virtual ~Create_native_func() = default;
+  virtual ~Create_native_func() {}
 };
 
 
@@ -226,8 +222,8 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name,
+                            List<Item> *item_list);
 
   /**
     The builder create method, for qualified functions.
@@ -238,18 +234,26 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  virtual Item *create_with_db(THD *thd,
-                               const Lex_ident_db_normalized &db,
-                               const Lex_ident_routine &name,
+  virtual Item *create_with_db(THD *thd, LEX_CSTRING *db, LEX_CSTRING *name,
                                bool use_explicit_name,
                                List<Item> *item_list) = 0;
 
 protected:
   /** Constructor. */
-  Create_qfunc() = default;
+  Create_qfunc() {}
   /** Destructor. */
-  virtual ~Create_qfunc() = default;
+  virtual ~Create_qfunc() {}
 };
+
+
+/**
+  Find the native function builder associated with a given function name.
+  @param thd The current thread
+  @param name The native function name
+  @return The native function builder associated with the name, or NULL
+*/
+extern Create_func *find_native_function_builder(THD *thd,
+                                                 const LEX_CSTRING *name);
 
 
 /**
@@ -268,8 +272,8 @@ extern Create_qfunc * find_qualified_function_builder(THD *thd);
 class Create_udf_func : public Create_func
 {
 public:
-  Item *create_func(THD *thd, const LEX_CSTRING *name, List<Item> *item_list)
-    override;
+  virtual Item *create_func(THD *thd, LEX_CSTRING *name,
+                            List<Item> *item_list);
 
   /**
     The builder create method, for User Defined Functions.
@@ -285,9 +289,9 @@ public:
 
 protected:
   /** Constructor. */
-  Create_udf_func() = default;
+  Create_udf_func() {}
   /** Destructor. */
-  virtual ~Create_udf_func() = default;
+  virtual ~Create_udf_func() {}
 };
 #endif
 
@@ -298,55 +302,9 @@ struct Native_func_registry
   Create_func *builder;
 };
 
-
-class Native_functions_hash: public HASH
-{
-public:
-  Native_functions_hash()
-  {
-    bzero((void*) this, sizeof(*this));
-  }
-  ~Native_functions_hash()
-  {
-    /*
-      No automatic free because objects of this type
-      are expected to be declared statically.
-      The code in cleanup() calls my_hash_free() which may not work correctly
-      at the very end of mariadbd shutdown.
-      The the upper level code should call cleanup() explicitly.
-
-      Unfortunatelly, it's not possible to use DBUG_ASSERT(!records) here,
-      because the server terminates using exit() in some cases,
-      e.g. in the test main.named_pipe with the "Create named pipe failed"
-      error.
-    */
-  }
-  bool init(size_t count);
-  bool append(const Native_func_registry array[], size_t count);
-  bool remove(const Native_func_registry array[], size_t count);
-  bool replace(const Native_func_registry array[], size_t count)
-  {
-    DBUG_ENTER("Native_functions_hash::replace");
-    remove(array, count);
-    DBUG_RETURN(append(array, count));
-  }
-  void cleanup();
-  /**
-    Find the native function builder associated with a given function name.
-    @param thd The current thread
-    @param name The native function name
-    @return The native function builder associated with the name, or NULL
-  */
-  Create_func *find(THD *thd, const LEX_CSTRING &name) const;
-};
-
-extern MYSQL_PLUGIN_IMPORT Native_functions_hash native_functions_hash;
-extern MYSQL_PLUGIN_IMPORT Native_functions_hash native_functions_hash_oracle;
-
-extern const Native_func_registry func_array[];
-extern const size_t func_array_length;
-
 int item_create_init();
+int item_create_append(Native_func_registry array[]);
+int item_create_remove(Native_func_registry array[]);
 void item_create_cleanup();
 
 Item *create_func_dyncol_create(THD *thd, List<DYNCALL_CREATE_DEF> &list);
@@ -355,7 +313,7 @@ Item *create_func_dyncol_add(THD *thd, Item *str,
 Item *create_func_dyncol_delete(THD *thd, Item *str, List<Item> &nums);
 Item *create_func_dyncol_get(THD *thd, Item *num, Item *str,
                              const Type_handler *handler,
-                             const Lex_length_and_dec_st &length_and_dec,
+                             const char *c_len, const char *c_dec,
                              CHARSET_INFO *cs);
 Item *create_func_dyncol_json(THD *thd, Item *str);
 
@@ -378,9 +336,10 @@ public:
     DBUG_ASSERT(i < m_count);
     return m_elements[i];
   }
-  const Native_func_registry *elements() const { return m_elements; }
   size_t count() const { return m_count; }
+  bool append_to_hash(HASH *hash) const;
 };
 
 
 #endif
+

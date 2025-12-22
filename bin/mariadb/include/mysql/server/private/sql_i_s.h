@@ -18,7 +18,7 @@
 
 #include "sql_const.h"              // MAX_FIELD_VARCHARLENGTH
 #include "sql_basic_types.h"        // enum_nullability
-#include "sql_string.h"             // strlen, MY_CS_CHARACTER_SET_NAME_SIZE
+#include "sql_string.h"             // strlen, MY_CS_NAME_SIZE
 #include "lex_string.h"             // LEX_CSTRING
 #include "mysql_com.h"              // enum_field_types
 #include "my_time.h"                // TIME_SECOND_PART_DIGITS
@@ -42,6 +42,13 @@ enum enum_show_open_table
   SKIP_OPEN_TABLE= 0U,              // do not open table
   OPEN_FRM_ONLY=   1U,              // open FRM file only
   OPEN_FULL_TABLE= 2U               // open FRM,MYD, MYI files
+};
+
+
+enum enum_show_default
+{
+  DEFAULT_TYPE_IMPLICIT= 0,
+  DEFAULT_NONE
 };
 
 
@@ -88,32 +95,42 @@ public:
 class ST_FIELD_INFO: public Show::Type
 {
 protected:
-  Lex_ident_column m_name;            // I_S column name
+  LEX_CSTRING m_name;                 // I_S column name
   enum_nullability m_nullability;     // NULLABLE or NOT NULL
-  Lex_ident_column m_old_name;        // SHOW column name
+  enum_show_default m_def;            // Whether has a DEFAULT value
+  LEX_CSTRING m_old_name;             // SHOW column name
   enum_show_open_table m_open_method;
 public:
-  ST_FIELD_INFO(const Lex_ident_column &name, const Type &type,
+  ST_FIELD_INFO(const LEX_CSTRING &name, const Type &type,
                 enum_nullability nullability,
-                const Lex_ident_column &old_name,
+                enum_show_default def,
+                LEX_CSTRING &old_name,
                 enum_show_open_table open_method)
    :Type(type), m_name(name),
     m_nullability(nullability),
+    m_def(def),
     m_old_name(old_name),
     m_open_method(open_method)
   { }
   ST_FIELD_INFO(const char *name, const Type &type,
                 enum_nullability nullability,
+                enum_show_default def,
                 const char *old_name,
                 enum_show_open_table open_method)
-   :Type(type), m_name(Lex_cstring_strlen(name)),
+   :Type(type),
     m_nullability(nullability),
-    m_old_name(Lex_cstring_strlen(old_name)),
+    m_def(def),
     m_open_method(open_method)
-  { }
-  const Lex_ident_column &name() const { return m_name; }
+  {
+    m_name.str= name;
+    m_name.length= safe_strlen(name);
+    m_old_name.str= old_name;
+    m_old_name.length= safe_strlen(old_name);
+  }
+  const LEX_CSTRING &name() const { return m_name; }
   bool nullable() const { return m_nullability == NULLABLE; }
-  const Lex_ident_column &old_name() const { return m_old_name; }
+  enum_show_default def() const { return m_def; }
+  const LEX_CSTRING &old_name() const { return m_old_name; }
   enum_show_open_table open_method() const { return  m_open_method; }
   bool end_marker() const { return m_name.str == NULL; }
 };
@@ -142,10 +159,8 @@ class Varchar: public Type
 public:
   Varchar(uint length) :Type(&type_handler_varchar, length, false)
   {
-    // utf8mb3 Varchars longer than MAX_FIELD_VARCHARLENGTH/3 become Longtexts
     DBUG_ASSERT(length * 3 <= MAX_FIELD_VARCHARLENGTH);
   }
-  Varchar(): Type(&type_handler_varchar, MAX_FIELD_VARCHARLENGTH/3, false) {}
 };
 
 
@@ -156,15 +171,10 @@ public:
 };
 
 
-class Yes_or_empty: public Varchar
+class Yesno: public Varchar
 {
 public:
-  Yes_or_empty(): Varchar(3) { }
-  static LEX_CSTRING value(bool val)
-  {
-    return val ? Lex_cstring(STRING_WITH_LEN("Yes")) :
-                 Lex_cstring();
-  }
+  Yesno(): Varchar(3) { }
 };
 
 
@@ -199,14 +209,7 @@ public:
 class CSName: public Varchar
 {
 public:
-  CSName(): Varchar(MY_CS_CHARACTER_SET_NAME_SIZE) { }
-};
-
-
-class CLName: public Varchar
-{
-public:
-  CLName(): Varchar(MY_CS_COLLATION_NAME_SIZE) { }
+  CSName(): Varchar(MY_CS_NAME_SIZE) { }
 };
 
 
@@ -244,13 +247,6 @@ class ULong: public Type
 public:
   ULong(uint length) :Type(&type_handler_ulong, length, true) { }
   ULong() :ULong(MY_INT32_NUM_DECIMAL_DIGITS) { }
-};
-
-
-class UShort: public Type
-{
-public:
-  UShort(uint length): Type(&type_handler_ushort, length, true) {}
 };
 
 
@@ -304,15 +300,27 @@ class Column: public ST_FIELD_INFO
 public:
   Column(const char *name, const Type &type,
          enum_nullability nullability,
+         enum_show_default def,
          const char *old_name,
          enum_show_open_table open_method= SKIP_OPEN_TABLE)
-   :ST_FIELD_INFO(name, type, nullability,
+   :ST_FIELD_INFO(name, type, nullability, def, old_name, open_method)
+  { }
+  Column(const char *name, const Type &type, enum_nullability nullability,
+         enum_show_default def,
+         enum_show_open_table open_method= SKIP_OPEN_TABLE)
+   :ST_FIELD_INFO(name, type, nullability, def, NullS, open_method)
+  { }
+  Column(const char *name, const Type &type,
+         enum_nullability nullability,
+         const char *old_name,
+         enum_show_open_table open_method= SKIP_OPEN_TABLE)
+   :ST_FIELD_INFO(name, type, nullability, DEFAULT_TYPE_IMPLICIT,
                   old_name, open_method)
   { }
   Column(const char *name, const Type &type,
          enum_nullability nullability,
          enum_show_open_table open_method= SKIP_OPEN_TABLE)
-   :ST_FIELD_INFO(name, type, nullability,
+   :ST_FIELD_INFO(name, type, nullability, DEFAULT_TYPE_IMPLICIT,
                   NullS, open_method)
   { }
 };
@@ -334,7 +342,7 @@ typedef class Item COND;
 
 typedef struct st_schema_table
 {
-  Lex_ident_i_s_table table_name;
+  const char *table_name;
   ST_FIELD_INFO *fields_info;
   /* for FLUSH table_name */
   int (*reset_table) ();

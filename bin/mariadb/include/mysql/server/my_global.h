@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2001, 2013, Oracle and/or its affiliates.
-   Copyright (c) 2009, 2022, MariaDB Corporation.
+   Copyright (c) 2009, 2019, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,19 +22,15 @@
 
 /*
   MDEV-25602 Deprecate __WIN__ symbol.
+  Temporarily, allow inside connect engine,
+  until fixed in upstream.
 */
-#if defined (_MSC_VER) && !defined(__clang__)
+#ifndef connect_EXPORTS
+#ifdef _MSC_VER
 #pragma deprecated("__WIN__")
 #elif defined (__GNUC__)
 #pragma GCC poison __WIN__
 #endif
-
-#if defined(_MSC_VER) && !defined(__clang__)
-/*
-  Following functions have bugs, when used with UTF-8 active codepage.
-  #include <winservice.h> will use the non-buggy wrappers
-*/
-#pragma deprecated("CreateServiceA", "OpenServiceA", "ChangeServiceConfigA")
 #endif
 
 /*
@@ -330,6 +326,13 @@ C_MODE_END
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#if defined(__cplusplus) && defined(NO_CPLUSPLUS_ALLOCA)
+#undef HAVE_ALLOCA
+#undef HAVE_ALLOCA_H
+#endif
+#ifdef HAVE_ALLOCA_H
+#include <alloca.h>
+#endif
 
 #include <errno.h>				/* Recommended by debian */
 /* We need the following to go around a problem with openssl on solaris */
@@ -486,7 +489,6 @@ typedef unsigned short ushort;
 #endif
 
 #include <my_compiler.h>
-#include <my_alloca.h>
 
 /*
   Wen using the embedded library, users might run into link problems,
@@ -540,9 +542,10 @@ typedef int	pbool;		/* Mixed prototypes can't take char */
 typedef int	pshort;		/* Mixed prototypes can't take short int */
 typedef double	pfloat;		/* Mixed prototypes can't take float */
 #endif
-
-#include <my_cmp.h>
-
+C_MODE_START
+typedef int	(*qsort_cmp)(const void *,const void *);
+typedef int	(*qsort_cmp2)(void*, const void *,const void *);
+C_MODE_END
 #define qsort_t RETQSORTTYPE	/* Broken GCC can't handle typedef !!!! */
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -591,9 +594,6 @@ typedef SOCKET_SIZE_TYPE size_socket;
 #else
 #define HAVE_SOCK_CLOEXEC
 #endif
-#ifndef O_TEXT
-#define O_TEXT 0
-#endif
 
 /* additional file share flags for win32 */
 #ifdef _WIN32
@@ -638,7 +638,7 @@ typedef SOCKET_SIZE_TYPE size_socket;
   the mismatch of CRT and mysys file IO usage on Windows at runtime.
   CRT file descriptors can be in the range 0-2047, whereas descriptors returned
   by my_open() will start with 2048. If a file descriptor with value less then
-  MY_FILE_MIN is passed to mysys IO function, chances are it stems from
+  MY_FILE_MIN is passed to mysys IO function, chances are it stemms from
   open()/fileno() and not my_open()/my_fileno.
 
   For Posix,  mysys functions are light wrappers around libc, and MY_FILE_MIN
@@ -675,14 +675,13 @@ typedef SOCKET_SIZE_TYPE size_socket;
   Io buffer size; Must be a power of 2 and a multiple of 512. May be
   smaller what the disk page size. This influences the speed of the
   isam btree library. eg to big to slow.
-  4096 is a common block size on SSDs.
 */
 #define IO_SIZE			4096U
 /*
-  How much overhead does malloc/my_malloc have. The code often allocates
+  How much overhead does malloc have. The code often allocates
   something like 1024-MALLOC_OVERHEAD bytes
 */
-#define MALLOC_OVERHEAD (8+24)
+#define MALLOC_OVERHEAD 8
 
 	/* get memory in huncs */
 #define ONCE_ALLOC_INIT		(uint) 4096
@@ -781,7 +780,7 @@ inline unsigned long long my_double2ulonglong(double d)
 #define INT_MAX64       0x7FFFFFFFFFFFFFFFLL
 #define INT_MIN32       (~0x7FFFFFFFL)
 #define INT_MAX32       0x7FFFFFFFL
-#define UINT_MAX32      0xFFFFFFFFUL
+#define UINT_MAX32      0xFFFFFFFFL
 #define INT_MIN24       (~0x007FFFFF)
 #define INT_MAX24       0x007FFFFF
 #define UINT_MAX24      0x00FFFFFF
@@ -834,6 +833,7 @@ typedef long long	my_ptrdiff_t;
 #define ALIGN_PTR(A, t) ((t*) MY_ALIGN((A), sizeof(double)))
 #define ADD_TO_PTR(ptr,size,type) (type) ((uchar*) (ptr)+size)
 #define PTR_BYTE_DIFF(A,B) (my_ptrdiff_t) ((uchar*) (A) - (uchar*) (B))
+#define PREV_BITS(type,A)	((type) (((type) 1 << (A)) -1))
 
 /*
   Custom version of standard offsetof() macro which can be used to get
@@ -861,7 +861,7 @@ typedef long long	my_ptrdiff_t;
 #define STDCALL
 #endif
 
-/* Typdefs for easier portability */
+/* Typdefs for easyier portability */
 
 #ifndef HAVE_UCHAR
 typedef unsigned char	uchar;	/* Short for unsigned char */
@@ -972,7 +972,6 @@ typedef struct st_mysql_lex_string LEX_STRING;
 #define SOCKET_ECONNRESET WSAECONNRESET
 #define SOCKET_ENFILE	ENFILE
 #define SOCKET_EMFILE	EMFILE
-#define SOCKET_CLOSED   EIO
 #else /* Unix */
 #define socket_errno	errno
 #define closesocket(A)	close(A)
@@ -982,7 +981,6 @@ typedef struct st_mysql_lex_string LEX_STRING;
 #define SOCKET_EADDRINUSE EADDRINUSE
 #define SOCKET_ETIMEDOUT ETIMEDOUT
 #define SOCKET_ECONNRESET ECONNRESET
-#define SOCKET_CLOSED   EIO
 #define SOCKET_ENFILE	ENFILE
 #define SOCKET_EMFILE	EMFILE
 #endif
@@ -1059,12 +1057,10 @@ typedef ulong		myf;	/* Type of MyFlags in my_funcs */
 static inline char *dlerror(void)
 {
   static char win_errormsg[2048];
-  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM |
-                 FORMAT_MESSAGE_IGNORE_INSERTS |
-                 FORMAT_MESSAGE_MAX_WIDTH_MASK,
-                 0, GetLastError(),
-                 MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-                 win_errormsg, 2048, NULL);
+  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM
+      | FORMAT_MESSAGE_IGNORE_INSERTS
+      | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+    0, GetLastError(), 0, win_errormsg, 2048, NULL);
   return win_errormsg;
 }
 #define HAVE_DLOPEN 1

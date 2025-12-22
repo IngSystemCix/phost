@@ -65,7 +65,7 @@ class PROFILING;
   Implements a persistent FIFO using server List method names.  Not
   thread-safe.  Intended to be used on thread-local data only.  
 */
-template <class T> class FIFO_Queue
+template <class T> class Queue
 {
 private:
 
@@ -78,7 +78,7 @@ private:
   struct queue_item *first, *last;
 
 public:
-  FIFO_Queue()
+  Queue()
   {
     elements= 0;
     first= last= NULL;
@@ -95,7 +95,7 @@ public:
     elements= 0;
   }
 
-  ulong elements;                       /* The count of items in the FIFO_Queue */
+  ulong elements;                       /* The count of items in the Queue */
 
   void push_back(T *payload)
   {
@@ -103,8 +103,6 @@ public:
 
     new_item= (struct queue_item *) my_malloc(key_memory_queue_item,
                                               sizeof(struct queue_item), MYF(0));
-    if (!new_item)
-      return;
 
     new_item->payload= payload;
 
@@ -129,7 +127,7 @@ public:
 
     if (first == NULL)
     {
-      DBUG_PRINT("warning", ("tried to pop nonexistent item from FIFO_Queue"));
+      DBUG_PRINT("warning", ("tried to pop nonexistent item from Queue"));
       return NULL;
     }
 
@@ -228,7 +226,7 @@ private:
   double m_start_time_usecs;
   double m_end_time_usecs;
   ulong m_seq_counter;
-  FIFO_Queue<PROF_MEASUREMENT> entries;
+  Queue<PROF_MEASUREMENT> entries;
 
 
   QUERY_PROFILE(PROFILING *profiling_arg, const char *status_arg);
@@ -268,7 +266,7 @@ private:
 
   QUERY_PROFILE *current;
   QUERY_PROFILE *last;
-  FIFO_Queue<QUERY_PROFILE> history;
+  Queue<QUERY_PROFILE> history;
  
   query_id_t next_profile_id() { return(profile_id_counter++); }
 
@@ -298,11 +296,7 @@ public:
   {
     DBUG_ASSERT(!current);
     if (unlikely(enabled))
-    {
-      QUERY_PROFILE *new_profile= new QUERY_PROFILE(this, initial_state);
-      if (new_profile)
-        current= new_profile;
-    }
+      current= new QUERY_PROFILE(this, initial_state);
   }
 
   void discard_current_query();

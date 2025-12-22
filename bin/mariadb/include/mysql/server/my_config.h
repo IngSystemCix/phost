@@ -34,16 +34,10 @@
 #define HAVE_FLOAT_H 1
 /* #undef HAVE_FNMATCH_H */
 /* #undef HAVE_FPU_CONTROL_H */
-/* #undef HAVE_GETMNTENT */
-/* #undef HAVE_GETMNTENT_IN_SYS_MNTAB */
-/* #undef HAVE_GETMNTINFO */
-/* #undef HAVE_GETMNTINFO64 */
-/* #undef HAVE_GETMNTINFO_TAKES_statvfs */
 /* #undef HAVE_GRP_H */
 /* #undef HAVE_IA64INTRIN_H */
 /* #undef HAVE_IEEEFP_H */
 /* #undef HAVE_INTTYPES_H */
-#define HAVE_IMMINTRIN_H 1
 /* #undef HAVE_KQUEUE */
 #define HAVE_LIMITS_H 1
 /* #undef HAVE_LINK_H */
@@ -73,7 +67,6 @@
 /* #undef HAVE_SYS_IOCTL_H */
 /* #undef HAVE_SYS_MALLOC_H */
 /* #undef HAVE_SYS_MMAN_H */
-/* #undef HAVE_SYS_MNTENT_H */
 /* #undef HAVE_SYS_NDIR_H */
 /* #undef HAVE_SYS_PTE_H */
 /* #undef HAVE_SYS_PTEM_H */
@@ -128,6 +121,7 @@
 /* Functions we may want to use. */
 /* #undef HAVE_ACCEPT4 */
 #define HAVE_ACCESS 1
+/* #undef HAVE_ALARM */
 #define HAVE_ALLOCA 1
 /* #undef HAVE_BFILL */
 /* #undef HAVE_INDEX */
@@ -151,6 +145,7 @@
 #define HAVE_GETCWD 1
 /* #undef HAVE_GETHOSTBYADDR_R */
 /* #undef HAVE_GETHRTIME */
+/* #undef HAVE_GETPAGESIZE */
 /* #undef HAVE_GETPAGESIZES */
 /* #undef HAVE_GETPASS */
 /* #undef HAVE_GETPASSPHRASE */
@@ -168,6 +163,7 @@
 /* #undef HAVE_LRAND48 */
 #define HAVE_LOCALTIME_R 1
 /* #undef HAVE_LSTAT */
+/* #undef HAVE_MEMALIGN */
 /* #undef HAVE_MLOCK */
 /* #undef HAVE_NL_LANGINFO */
 /* #undef HAVE_MADVISE */
@@ -183,7 +179,6 @@
 /* #undef HAVE_MLOCKALL */
 /* #undef HAVE_MMAP */
 /* #undef HAVE_MMAP64 */
-/* #undef HAVE_MPROTECT */
 #define HAVE_PERROR 1
 /* #undef HAVE_POLL */
 /* #undef HAVE_POSIX_FALLOCATE */
@@ -195,7 +190,6 @@
 /* #undef HAVE_PTHREAD_ATTR_GETSTACKSIZE */
 /* #undef HAVE_PTHREAD_ATTR_SETSCOPE */
 /* #undef HAVE_PTHREAD_ATTR_SETSTACKSIZE */
-/* #undef HAVE_PTHREAD_GETATTR_NP */
 /* #undef HAVE_PTHREAD_CONDATTR_CREATE */
 /* #undef HAVE_PTHREAD_GETAFFINITY_NP */
 /* #undef HAVE_PTHREAD_KEY_DELETE */
@@ -215,7 +209,6 @@
 #define HAVE_SELECT 1
 /* #undef HAVE_SETENV */
 #define HAVE_SETLOCALE 1
-/* #undef HAVE_SETMNTENT */
 /* #undef HAVE_SETUPTERM */
 /* #undef HAVE_SIGSET */
 /* #undef HAVE_SIGACTION */
@@ -223,6 +216,7 @@
 /* #undef HAVE_SIGWAIT */
 /* #undef HAVE_SIGWAITINFO */
 /* #undef HAVE_SLEEP */
+#define HAVE_SNPRINTF 1
 /* #undef HAVE_STPCPY */
 #define HAVE_STRERROR 1
 #define HAVE_STRCOLL 1
@@ -233,6 +227,7 @@
 #define HAVE_STRTOUL 1
 #define HAVE_STRTOULL 1
 #define HAVE_TELL 1
+/* #undef HAVE_THR_SETCONCURRENCY */
 /* #undef HAVE_THR_YIELD */
 #define HAVE_TIME 1
 /* #undef HAVE_TIMES */
@@ -255,7 +250,9 @@
 /* #undef HAVE_SOCKADDR_IN6_SIN6_LEN */
 #define STRUCT_TIMESPEC_HAS_TV_SEC 1
 #define STRUCT_TIMESPEC_HAS_TV_NSEC 1
-/* #undef STRUCT_TM_HAS_TM_GMTOFF */
+
+#define USE_MB 1
+#define USE_MB_IDENT 1
 
 /* this means that valgrind headers and macros are available */
 /* #undef HAVE_VALGRIND_MEMCHECK_H */
@@ -365,7 +362,7 @@
 /* #undef HAVE_WCHAR_T */
 
 
-/* #undef HAVE_STRCASECMP */
+#define HAVE_STRCASECMP 1
 /* #undef HAVE_TCGETATTR */
 
 /* #undef HAVE_WEAK_SYMBOL */
@@ -378,13 +375,14 @@
 /* #undef HAVE_SVR3_SIGNALS */
 /* #undef HAVE_V7_SIGNALS */
 #define HAVE_ERR_remove_thread_state 1
-/* #undef HAVE_X509_check_host */
+#define HAVE_X509_check_host 1
 
 /* #undef HAVE_SOLARIS_STYLE_GETHOST */
 
 /* #undef HAVE_GCC_C11_ATOMICS */
 /* #undef HAVE_SOLARIS_ATOMIC */
 #define NO_FCNTL_NONBLOCK 1
+#define NO_ALARM 1
 
 /* #undef _LARGE_FILES */
 #define _LARGEFILE_SOURCE 1
@@ -402,27 +400,38 @@
 #define SIGNAL_WITH_VIO_CLOSE 1
 
 /* Windows stuff, mostly functions, that have Posix analogs but named differently */
-#ifdef _WIN32
 #define S_IROTH _S_IREAD
 #define S_IFIFO _S_IFIFO
-#define SIGQUIT SIGTERM
-#define SIGPIPE SIGINT
+/* #undef IPPROTO_IPV6 */
+/* #undef IPV6_V6ONLY */
 #define sigset_t int
 #define mode_t int
+#define SIGQUIT SIGTERM
+#define SIGPIPE SIGINT
 #define popen _popen
 #define pclose _pclose
 #define ssize_t SSIZE_T
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
+/* #undef snprintf */
 #define strtok_r strtok_s
+#define strtoll _strtoi64
+#define strtoull _strtoui64
+/* #undef vsnprintf */
+#if defined(_MSC_VER) && (_MSC_VER > 1800)
 #define tzname _tzname
 #define P_tmpdir "C:\\TEMP"
+#endif
+#if defined(_MSC_VER) && (_MSC_VER > 1310)
+# define HAVE_SETENV
 #define setenv(a,b,c) _putenv_s(a,b)
+#endif
+#define PSAPI_VERSION 1     /* for GetProcessMemoryInfo() */
 
-#define HAVE_SETENV
+/* We don't want the min/max macros */
+#ifdef _WIN32
 #define NOMINMAX 1
-#define PSAPI_VERSION 2     /* for GetProcessMemoryInfo() */
-#endif /* _WIN32 */
+#endif
 
 /*
   MySQL features
@@ -437,19 +446,14 @@
 #define USE_SYMDIR 1
 
 /* Character sets and collations */
-#define MYSQL_DEFAULT_CHARSET_NAME "utf8mb4"
-#define MYSQL_DEFAULT_COLLATION_NAME "utf8mb4_uca1400_ai_ci"
+#define MYSQL_DEFAULT_CHARSET_NAME "latin1"
+#define MYSQL_DEFAULT_COLLATION_NAME "latin1_swedish_ci"
 
-#define USE_MB
-#define USE_MB_IDENT
+#define USE_MB 1
+#define USE_MB_IDENT 1
 
 /* This should mean case insensitive file system */
 #define FN_NO_CASE_SENSE 1
-
-/* Whether an anonymous private mapping is unaccessible after
-madvise(MADV_DONTNEED) or madvise(MADV_FREE) or similar has been invoked;
-this is the case with Microsoft Windows VirtualFree(MEM_DECOMMIT) */
-#define HAVE_UNACCESSIBLE_AFTER_MEM_DECOMMIT 1
 
 #define HAVE_CHARSET_armscii8 1
 #define HAVE_CHARSET_ascii 1
@@ -491,10 +495,16 @@ this is the case with Microsoft Windows VirtualFree(MEM_DECOMMIT) */
 #define HAVE_CHARSET_utf32 1
 #define HAVE_UCA_COLLATIONS 1
 #define HAVE_COMPRESS 1
-#define HAVE_EncryptAes128Ctr 1
+/* #undef HAVE_EncryptAes128Ctr */
 /* #undef HAVE_EncryptAes128Gcm */
-#define HAVE_des 1
-#define HAVE_hkdf 1
+
+/*
+  Stuff that always need to be defined (compile breaks without it)
+*/
+#define HAVE_SPATIAL 1
+#define HAVE_RTREE_KEYS 1
+#define HAVE_QUERY_CACHE 1
+#define BIG_TABLES 1
 
 /*
   Important storage engines (those that really need define 
@@ -506,29 +516,29 @@ this is the case with Microsoft Windows VirtualFree(MEM_DECOMMIT) */
 #define WITH_ARIA_STORAGE_ENGINE 1
 #define USE_ARIA_FOR_TMP_TABLES 1
 
-#define DEFAULT_MYSQL_HOME "C:/Program Files/MariaDB 11.8"
+#define DEFAULT_MYSQL_HOME "C:/Program Files/MariaDB 10.6"
 #define SHAREDIR "share"
-#define DEFAULT_BASEDIR "C:/Program Files/MariaDB 11.8"
-#define MYSQL_DATADIR "C:/Program Files/MariaDB 11.8/data"
-#define DEFAULT_CHARSET_HOME "C:/Program Files/MariaDB 11.8"
-#define PLUGINDIR "C:/Program Files/MariaDB 11.8/lib/plugin"
+#define DEFAULT_BASEDIR "C:/Program Files/MariaDB 10.6"
+#define MYSQL_DATADIR "C:/Program Files/MariaDB 10.6/data"
+#define DEFAULT_CHARSET_HOME "C:/Program Files/MariaDB 10.6"
+#define PLUGINDIR "C:/Program Files/MariaDB 10.6/lib/plugin"
 /* #undef DEFAULT_SYSCONFDIR */
 #define DEFAULT_TMPDIR P_tmpdir
 
 /* #undef SO_EXT */
 
-#define MYSQL_VERSION_MAJOR 11
-#define MYSQL_VERSION_MINOR 8
-#define MYSQL_VERSION_PATCH 3
+#define MYSQL_VERSION_MAJOR 10
+#define MYSQL_VERSION_MINOR 6
+#define MYSQL_VERSION_PATCH 4
 #define MYSQL_VERSION_EXTRA ""
 
 #define PACKAGE "mysql"
 #define PACKAGE_BUGREPORT ""
 #define PACKAGE_NAME "MySQL Server"
-#define PACKAGE_STRING "MySQL Server 11.8.3"
+#define PACKAGE_STRING "MySQL Server 10.6.4"
 #define PACKAGE_TARNAME "mysql"
-#define PACKAGE_VERSION "11.8.3"
-#define VERSION "11.8.3"
+#define PACKAGE_VERSION "10.6.4"
+#define VERSION "10.6.4"
 #define PROTOCOL_VERSION 10
 #define PCRE2_CODE_UNIT_WIDTH 8
 
@@ -542,6 +552,7 @@ this is the case with Microsoft Windows VirtualFree(MEM_DECOMMIT) */
 #ifndef EMBEDDED_LIBRARY
 /* #undef WSREP_INTERFACE_VERSION */
 /* #undef WITH_WSREP */
+/* #undef WSREP_PROC_INFO */
 #endif
 
 #if !defined(__STDC_FORMAT_MACROS)
@@ -549,5 +560,3 @@ this is the case with Microsoft Windows VirtualFree(MEM_DECOMMIT) */
 #endif  // !defined(__STDC_FORMAT_MACROS)
 
 #endif
-
-/* #undef HAVE_VFORK */

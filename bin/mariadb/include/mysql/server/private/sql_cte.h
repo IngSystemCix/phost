@@ -36,7 +36,7 @@ struct st_unit_ctxt_elem;
 class With_element_head : public Sql_alloc
 {
   /* The name of the defined CTE */
-  const Lex_ident_with_element query_name;
+  LEX_CSTRING *query_name;
 
 public:
   /*
@@ -47,7 +47,7 @@ public:
   */
   TABLE_CHAIN tables_pos;
 
-  With_element_head(const Lex_ident_with_element &name)
+  With_element_head(LEX_CSTRING *name)
     : query_name(name)
   {
     tables_pos.set_start_pos(0);
@@ -224,8 +224,8 @@ public:
       level(0), rec_result(NULL)
   { unit->with_element= this; }
 
-  const Lex_ident_with_element get_name() const { return head->query_name; }
-  const char *get_name_str() const { return get_name().str; }
+  LEX_CSTRING *get_name() { return head->query_name; }
+  const char *get_name_str() { return get_name()->str; }
 
   void set_tables_start_pos(TABLE_LIST **pos)
   { head->tables_pos.set_start_pos(pos); }
@@ -325,8 +325,9 @@ public:
 
   friend
   bool LEX::resolve_references_to_cte(TABLE_LIST *tables,
-                                      TABLE_LIST **tables_last,
-                                      st_select_lex_unit *excl_spec);
+                                      TABLE_LIST **tables_last);
+  friend
+  bool LEX::resolve_references_to_cte_in_hanging_cte();
 };
 
 const uint max_number_of_elements_in_with_clause= sizeof(table_map)*8;
@@ -392,24 +393,10 @@ public:
   bool add_with_element(With_element *elem);
 
   /* Add this with clause to the list of with clauses used in the statement */
-  void add_to_list(With_clause **ptr, With_clause ** &last_next)
+  void add_to_list(With_clause ** &last_next)
   {
-    if (embedding_with_clause)
-    {
-      /* 
-        An embedded with clause is always placed before the embedding one
-        in the list of with clauses used in the query.
-      */
-      while (*ptr != embedding_with_clause)
-        ptr= &(*ptr)->next_with_clause;
-      *ptr= this;
-      next_with_clause= embedding_with_clause;
-    }
-    else
-    {
-      *last_next= this;
-      last_next= &this->next_with_clause;
-    }
+    *last_next= this;
+    last_next= &this->next_with_clause;
   }
 
   st_select_lex_unit *get_owner() { return owner; }
@@ -426,8 +413,7 @@ public:
 
   void move_anchors_ahead();
 
-  With_element *find_table_def(TABLE_LIST *table, With_element *barrier,
-                               st_select_lex_unit *excl_spec);
+  With_element *find_table_def(TABLE_LIST *table, With_element *barrier);
 
   With_element *find_table_def_in_with_clauses(TABLE_LIST *table);
 
@@ -441,6 +427,9 @@ public:
 
   friend
   bool LEX::check_dependencies_in_with_clauses();
+
+  friend
+  bool LEX::resolve_references_to_cte_in_hanging_cte();
 };
 
 inline
@@ -549,8 +538,5 @@ void st_select_lex::set_with_clause(With_clause *with_clause)
   if (with_clause)
     with_clause->set_owner(master_unit());
 }
-
-void list_strlex_print(THD *thd, String *str, List<Lex_ident_sys> *list,
-                              bool bracketed= false);
 
 #endif /* SQL_CTE_INCLUDED */

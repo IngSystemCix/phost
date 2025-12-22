@@ -29,7 +29,7 @@
 /* extra 4+4 bytes for slave tmp tables */
 #define MAX_DBKEY_LENGTH (NAME_LEN*2+1+1+4+4)
 #define MAX_ALIAS_NAME 256
-#define MAX_FIELD_NAME (NAME_LEN+1)             /* Max colum name length +1 */
+#define MAX_FIELD_NAME 34			/* Max colum name length +2 */
 #define MAX_SYS_VAR_LENGTH 32
 #define MAX_KEY MAX_INDEXES                     /* Max used keys */
 #define MAX_REF_PARTS 32			/* Max parts used as ref */
@@ -119,13 +119,8 @@
 #define CREATE_MODE	0			/* Default mode on new files */
 #define NAMES_SEP_CHAR	255			/* Char to sep. names */
 
-/*
-   This is used when reading large blocks, sequential read.
-   We assume that reading this much will be roughly the same cost as 1
-   seek / fetching one row from the storage engine.
-   Cost of one read of DISK_CHUNK_SIZE is DISK_SEEK_BASE_COST (ms).
-*/
-#define DISK_CHUNK_SIZE	(uint) (65536) /* Size of diskbuffer for tmpfiles */
+#define READ_RECORD_BUFFER	(uint) (IO_SIZE*8) /* Pointer_buffer_size */
+#define DISK_BUFFER_SIZE	(uint) (IO_SIZE*16) /* Size of diskbuffer */
 
 #define FRM_VER_TRUE_VARCHAR (FRM_VER+4) /* 10 */
 #define FRM_VER_EXPRESSSIONS (FRM_VER+5) /* 11 */
@@ -180,26 +175,21 @@
 #define MYSQLD_NET_RETRY_COUNT  10	///< Abort read after this many int.
 #endif
 
-/*
-  Allocations with MEM_ROOT. We should try to keep these as powers of 2
-  and not higher than 32768 to get full benefit of allocators like
-  tcmalloc that will for these use a local heap without locks.
-*/
-
-#define QUERY_ALLOC_BLOCK_SIZE		32768
-#define QUERY_ALLOC_PREALLOC_SIZE   	32768 /* 65536 could be better */
+#define QUERY_ALLOC_BLOCK_SIZE		16384
+#define QUERY_ALLOC_PREALLOC_SIZE   	24576
 #define TRANS_ALLOC_BLOCK_SIZE		8192
 #define TRANS_ALLOC_PREALLOC_SIZE	4096
 #define RANGE_ALLOC_BLOCK_SIZE		4096
 #define ACL_ALLOC_BLOCK_SIZE		1024
 #define UDF_ALLOC_BLOCK_SIZE		1024
-#define TABLE_PREALLOC_BLOCK_SIZE	8192
-#define TABLE_ALLOC_BLOCK_SIZE		4096
+#define TABLE_ALLOC_BLOCK_SIZE		1024
 #define WARN_ALLOC_BLOCK_SIZE		2048
 #define WARN_ALLOC_PREALLOC_SIZE	1024
-#define TMP_TABLE_BLOCK_SIZE            16384
-#define TMP_TABLE_PREALLOC_SIZE         32768
-#define SHOW_ALLOC_BLOCK_SIZE           32768
+/*
+  Note that if we are using 32K or less, then TCmalloc will use a local
+  heap without locks!
+*/
+#define SHOW_ALLOC_BLOCK_SIZE           (32768-MALLOC_OVERHEAD)
 
 /*
   The following parameters is to decide when to use an extra cache to
@@ -209,18 +199,62 @@
 #define MIN_ROWS_TO_USE_TABLE_CACHE	 100
 #define MIN_ROWS_TO_USE_BULK_INSERT	 100
 
-/*
-  The lower bound of accepted rows when using filter.
-  This is used to ensure that filters are not too agressive.
+/**
+  The following is used to decide if MySQL should use table scanning
+  instead of reading with keys.  The number says how many evaluation of the
+  WHERE clause is comparable to reading one extra row from a table.
 */
-#define MIN_ROWS_AFTER_FILTERING 1.0
+#define TIME_FOR_COMPARE         5.0	//  5 WHERE compares == one read
+#define TIME_FOR_COMPARE_IDX    20.0
+
+#define IDX_BLOCK_COPY_COST  ((double) 1 / TIME_FOR_COMPARE)
+#define IDX_LOOKUP_COST      ((double) 1 / 8)
+#define MULTI_RANGE_READ_SETUP_COST (IDX_BLOCK_COPY_COST/10)
 
 /**
-  Number of rows in a reference table when refered through a not unique key.
+  Number of comparisons of table rowids equivalent to reading one row from a 
+  table.
+*/
+#define TIME_FOR_COMPARE_ROWID  (TIME_FOR_COMPARE*100)
+
+/* cost1 is better that cost2 only if cost1 + COST_EPS < cost2 */
+#define COST_EPS  0.001
+
+/*
+  For sequential disk seeks the cost formula is:
+    DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST * #blocks_to_skip  
+  
+  The cost of average seek 
+    DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST*BLOCKS_IN_AVG_SEEK =1.0.
+*/
+#define DISK_SEEK_BASE_COST ((double)0.9)
+
+#define BLOCKS_IN_AVG_SEEK  128
+
+#define DISK_SEEK_PROP_COST ((double)0.1/BLOCKS_IN_AVG_SEEK)
+
+
+/**
+  Number of rows in a reference table when refereed through a not unique key.
   This value is only used when we don't know anything about the key
   distribution.
 */
 #define MATCHING_ROWS_IN_OTHER_TABLE 10
+
+/*
+  Subquery materialization-related constants
+*/
+#define HEAP_TEMPTABLE_LOOKUP_COST 0.05
+#define DISK_TEMPTABLE_LOOKUP_COST 1.0
+#define SORT_INDEX_CMP_COST 0.02
+
+
+#define COST_MAX (DBL_MAX * (1.0 - DBL_EPSILON))
+
+#define COST_ADD(c,d) (COST_MAX - (d) > (c) ? (c) + (d) : COST_MAX)
+
+#define COST_MULT(c,f) (COST_MAX / (f) > (c) ? (c) * (f) : COST_MAX)
+
 
 #define MY_CHARSET_BIN_MB_MAXLEN 1
 

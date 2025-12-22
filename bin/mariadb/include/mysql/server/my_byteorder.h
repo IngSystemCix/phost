@@ -16,7 +16,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
-#include <string.h>
 
 /*
   Macro for reading 32-bit integer from network byte order (big-endian)
@@ -51,13 +50,5 @@
 #else
 #include "little_endian.h"
 #endif
-
-/* convenienve helpers */
-static inline float get_float(const void *from)
-{
-  float to;
-  float4get(to, ((const uchar*)from));
-  return to;
-}
 
 #endif /* MY_BYTEORDER_INCLUDED */

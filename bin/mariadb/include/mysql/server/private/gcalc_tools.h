@@ -52,15 +52,17 @@ private:
   int count_internal(const char *cur_func, uint set_type,
                      const char **end);
 public:
+  enum value
+  {
+    v_empty=   0x0000000,
+    v_find_t=  0x1000000,
+    v_find_f=  0x2000000,
+    v_t_found= 0x3000000,
+    v_f_found= 0x4000000,
+    v_mask=    0x7000000
+  };
   enum op_type
   {
-    v_empty=          0x00000000,
-    v_find_t=         0x01000000,
-    v_find_f=         0x02000000,
-    v_t_found=        0x03000000,
-    v_f_found=        0x04000000,
-    v_mask=           0x07000000,
-
     op_not=           0x80000000,
     op_shape=         0x00000000,
     op_union=         0x10000000,
@@ -146,16 +148,16 @@ public:
   Gcalc_operation_transporter(Gcalc_function *fn, Gcalc_heap *heap) :
     Gcalc_shape_transporter(heap), m_fn(fn) {}
 
-  int single_point(double x, double y) override;
-  int start_line() override;
-  int complete_line() override;
-  int start_poly() override;
-  int complete_poly() override;
-  int start_ring() override;
-  int complete_ring() override;
-  int add_point(double x, double y) override;
-  int start_collection(int n_objects) override;
-  int empty_shape() override;
+  int single_point(double x, double y);
+  int start_line();
+  int complete_line();
+  int start_poly();
+  int complete_poly();
+  int start_ring();
+  int complete_ring();
+  int add_point(double x, double y);
+  int start_collection(int n_objects);
+  int empty_shape();
 };
 
 

@@ -13,8 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
-#ifndef SQL_CACHE_INCLUDED
-#define SQL_CACHE_INCLUDED
+#ifndef _SQL_CACHE_H
+#define _SQL_CACHE_H
 
 #include "hash.h"
 #include "my_base.h"                            /* ha_rows */
@@ -32,7 +32,7 @@ typedef struct st_changed_table_list CHANGED_TABLE_LIST;
    Can't create new free memory block if unused memory in block less
    then QUERY_CACHE_MIN_ALLOCATION_UNIT.
    if QUERY_CACHE_MIN_ALLOCATION_UNIT == 0 then
-   QUERY_CACHE_MIN_ALLOCATION_UNIT choosed automatically
+   QUERY_CACHE_MIN_ALLOCATION_UNIT choosed automaticaly
 */
 #define QUERY_CACHE_MIN_ALLOCATION_UNIT		512
 
@@ -91,7 +91,7 @@ typedef my_bool (*qc_engine_callback)(THD *thd, const char *table_key,
 */
 struct Query_cache_block_table
 {
-  Query_cache_block_table() = default;                /* Remove gcc warning */
+  Query_cache_block_table() {}                /* Remove gcc warning */
 
   /**
     This node holds a position in a static table list belonging
@@ -122,7 +122,7 @@ struct Query_cache_block_table
 
 struct Query_cache_block
 {
-  Query_cache_block() = default;                      /* Remove gcc warning */
+  Query_cache_block() {}                      /* Remove gcc warning */
   enum block_type {FREE, QUERY, RESULT, RES_CONT, RES_BEG,
 		   RES_INCOMPLETE, TABLE, INCOMPLETE};
 
@@ -141,8 +141,8 @@ struct Query_cache_block
   inline bool is_free(void) { return type == FREE; }
   void init(size_t length);
   void destroy();
-  uint headers_len() const;
-  uchar* data(void) const;
+  uint headers_len();
+  uchar* data(void);
   Query_cache_query *query();
   Query_cache_table *table();
   Query_cache_result *result();
@@ -161,7 +161,7 @@ struct Query_cache_query
   uint8 ready;
   ulonglong hit_count;
 
-  Query_cache_query() = default;                      /* Remove gcc warning */
+  Query_cache_query() {}                      /* Remove gcc warning */
   inline void init_n_lock();
   void unlock_n_destroy();
   inline ulonglong found_rows()		   { return limit_found_rows; }
@@ -197,7 +197,7 @@ struct Query_cache_query
 
 struct Query_cache_table
 {
-  Query_cache_table() = default;                      /* Remove gcc warning */
+  Query_cache_table() {}                      /* Remove gcc warning */
   char *tbl;
   uint32 key_len;
   uint8 suffix_len;                          /* For partitioned tables */
@@ -240,7 +240,7 @@ struct Query_cache_table
 
 struct Query_cache_result
 {
-  Query_cache_result() = default;                     /* Remove gcc warning */
+  Query_cache_result() {}                     /* Remove gcc warning */
   Query_cache_block *query;
 
   inline uchar* data()
@@ -256,17 +256,17 @@ struct Query_cache_result
 
 extern "C"
 {
-  const uchar *query_cache_query_get_key(const void *record, size_t *length,
-                                         my_bool);
-  const uchar *query_cache_table_get_key(const void *record, size_t *length,
-                                         my_bool);
+  uchar *query_cache_query_get_key(const uchar *record, size_t *length,
+                                   my_bool not_used);
+  uchar *query_cache_table_get_key(const uchar *record, size_t *length,
+                                   my_bool not_used);
 }
 extern "C" void query_cache_invalidate_by_MyISAM_filename(const char* filename);
 
 
 struct Query_cache_memory_bin
 {
-  Query_cache_memory_bin() = default;                 /* Remove gcc warning */
+  Query_cache_memory_bin() {}                 /* Remove gcc warning */
 #ifndef DBUG_OFF
   size_t size;
 #endif
@@ -285,7 +285,7 @@ struct Query_cache_memory_bin
 
 struct Query_cache_memory_bin_step
 {
-  Query_cache_memory_bin_step() = default;            /* Remove gcc warning */
+  Query_cache_memory_bin_step() {}            /* Remove gcc warning */
   size_t size;
   size_t increment;
   size_t idx;
@@ -319,7 +319,7 @@ private:
   Cache_staus m_cache_status;
 
   void free_query_internal(Query_cache_block *point);
-  void invalidate_table_internal(uchar *key, size_t key_length);
+  void invalidate_table_internal(THD *thd, uchar *key, size_t key_length);
 
 protected:
   /*
@@ -375,7 +375,8 @@ protected:
   void invalidate_table(THD *thd, TABLE *table);
   void invalidate_table(THD *thd, uchar *key, size_t  key_length);
   void invalidate_table(THD *thd, Query_cache_block *table_block);
-  void invalidate_query_block_list(Query_cache_block_table *list_root);
+  void invalidate_query_block_list(THD *thd, 
+                                   Query_cache_block_table *list_root);
 
   TABLE_COUNTER_TYPE
     register_tables_from_list(THD *thd, TABLE_LIST *tables_used,
@@ -485,7 +486,7 @@ protected:
 		  my_bool using_transactions);
 
   /* Remove all queries that uses any of the tables in following database */
-  void invalidate(THD *thd, const LEX_CSTRING &db);
+  void invalidate(THD *thd, const char *db);
 
   /* Remove all queries that uses any of the listed following table */
   void invalidate_by_MyISAM_filename(const char *filename);
@@ -543,11 +544,11 @@ protected:
   void disable_query_cache(THD *thd);
 };
 
+#ifdef HAVE_QUERY_CACHE
 struct Query_cache_query_flags
 {
   unsigned int client_long_flag:1;
   unsigned int client_protocol_41:1;
-  unsigned int client_extended_metadata:1;
   unsigned int client_depr_eof:1;
   unsigned int protocol_type:2;
   unsigned int more_results_exists:1;
@@ -583,13 +584,29 @@ struct Query_cache_query_flags
   query_cache.send_result_to_client(A, B, C)
 #define query_cache_invalidate_by_MyISAM_filename_ref \
   &query_cache_invalidate_by_MyISAM_filename
-#define query_cache_invalidate_locked_for_write(A, B) \
-  query_cache.invalidate_locked_for_write(A, B)
 /* note the "maybe": it's a read without mutex */
 #define query_cache_maybe_disabled(T)                                 \
   (T->variables.query_cache_type == 0 || query_cache.query_cache_size == 0)
 #define query_cache_is_cacheable_query(L) \
   (((L)->sql_command == SQLCOM_SELECT) && (L)->safe_to_cache_query)
+#else
+#define QUERY_CACHE_FLAGS_SIZE 0
+#define query_cache_store_query(A, B)     do { } while(0)
+#define query_cache_destroy()             do { } while(0)
+#define query_cache_result_size_limit(A)  do { } while(0)
+#define query_cache_init()                do { } while(0)
+#define query_cache_resize(A)             do { } while(0)
+#define query_cache_set_min_res_unit(A)   do { } while(0)
+#define query_cache_invalidate3(A, B, C)  do { } while(0)
+#define query_cache_invalidate1(A,B)      do { } while(0)
+#define query_cache_send_result_to_client(A, B, C) 0
+#define query_cache_invalidate_by_MyISAM_filename_ref NULL
+
+#define query_cache_abort(A,B)            do { } while(0)
+#define query_cache_end_of_result(A)      do { } while(0)
+#define query_cache_maybe_disabled(T) 1
+#define query_cache_is_cacheable_query(L) 0
+#endif /*HAVE_QUERY_CACHE*/
 
 extern MYSQL_PLUGIN_IMPORT Query_cache query_cache;
 #endif

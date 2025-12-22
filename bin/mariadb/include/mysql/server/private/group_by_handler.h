@@ -53,8 +53,6 @@ class Select_limit_counters;
 struct Query
 {
   List<Item> *select;
-  /* Number of auxiliary fields. */
-  int        n_aux;
   bool        distinct;
   TABLE_LIST *from;
   Item       *where;
@@ -73,16 +71,13 @@ public:
 
   /*
     Temporary table where all results should be stored in record[0]
-    The table has a field for every item from the Query::select list,
-    except for const items and some other exceptions, see
-    Create_tmp_table::add_fields() for which items are included and
-    which are skipped.
+    The table has a field for every item from the Query::select list.
   */
   TABLE *table;
 
   group_by_handler(THD *thd_arg, handlerton *ht_arg)
     : thd(thd_arg), ht(ht_arg), table(0) {}
-  virtual ~group_by_handler() = default;
+  virtual ~group_by_handler() {}
 
   /*
     Functions to scan data. All these returns 0 if ok, error code in case

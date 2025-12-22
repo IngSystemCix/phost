@@ -15,35 +15,13 @@
 
 #ifndef JSON_WRITER_INCLUDED
 #define JSON_WRITER_INCLUDED
-
 #include "my_base.h"
-#include "sql_string.h"
-
-#if !defined(NDEBUG) || defined(JSON_WRITER_UNIT_TEST) || defined ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-#include <set>
-#include <stack>
-#include <string>
-#include <vector>
-#endif
-
-#ifdef JSON_WRITER_UNIT_TEST
-// Also, mock objects are defined in my_json_writer-t.cc
-#define VALIDITY_ASSERT(x) if (!(x)) this->invalid_json= true;
-#else
-#include "sql_class.h"  // For class THD
-#include "log.h" // for sql_print_error
-#define VALIDITY_ASSERT(x) DBUG_ASSERT(x)
-#endif
-
-#include <type_traits>
-
+#include "sql_select.h"
 class Opt_trace_stmt;
 class Opt_trace_context;
 class Json_writer;
+struct TABLE_LIST;
 
-struct TABLE;
-struct st_join_table;
-using JOIN_TAB= struct st_join_table;
 
 /*
   Single_line_formatting_helper is used by Json_writer to do better formatting
@@ -114,18 +92,9 @@ public:
   bool on_end_array();
   void on_start_object();
   // on_end_object() is not needed.
-
+   
   bool on_add_str(const char *str, size_t num_bytes);
 
-  /*
-    Returns true if the helper is flushing its buffer and is probably
-    making calls back to its Json_writer. (The Json_writer uses this
-    function to avoid re-doing the processing that it has already done
-    before making a call to fmt_helper)
-  */
-  bool is_making_writer_calls() const { return state == DISABLED; }
-
-private:
   void flush_on_one_line();
   void disable_and_flush();
 };
@@ -212,34 +181,12 @@ private:
 
 class Json_writer
 {
-#if !defined(NDEBUG) || defined(JSON_WRITER_UNIT_TEST)
-  /*
-    In debug mode, Json_writer will fail and assertion if one attempts to
-    produce an invalid JSON document (e.g. JSON array having named elements).
-  */
-  std::vector<bool> named_items_expectation;
-  std::stack<std::set<std::string> > named_items;
-
-  bool named_item_expected() const;
-
-  bool got_name;
-
-#ifdef JSON_WRITER_UNIT_TEST
-public:
-  // When compiled for unit test, creating invalid JSON will set this to true
-  // instead of an assertion.
-  bool invalid_json= false;
-#endif
-#endif
-
 public:
   /* Add a member. We must be in an object. */
   Json_writer& add_member(const char *name);
   Json_writer& add_member(const char *name, size_t len);
   
   /* Add atomic values */
-
-  /* Note: the add_str methods do not do escapes. Should this change? */
   void add_str(const char* val);
   void add_str(const char* val, size_t num_bytes);
   void add_str(const String &str);
@@ -257,10 +204,6 @@ public:
 private:
   void add_unquoted_str(const char* val);
   void add_unquoted_str(const char* val, size_t len);
-
-  bool on_add_str(const char *str, size_t num_bytes);
-  void on_start_object();
-
 public:
   /* Start a child object */
   void start_object();
@@ -278,9 +221,6 @@ public:
   size_t get_truncated_bytes() { return output.get_truncated_bytes(); }
 
   Json_writer() : 
-#if !defined(NDEBUG) || defined(JSON_WRITER_UNIT_TEST)
-    got_name(false),
-#endif
     indent_level(0), document_start(true), element_started(false), 
     first_child(true)
   {
@@ -368,12 +308,6 @@ public:
 /* A common base for Json_writer_object and Json_writer_array */
 class Json_writer_struct
 {
-  Json_writer_struct(const Json_writer_struct&)= delete;
-  Json_writer_struct& operator=(const Json_writer_struct&)= delete;
-
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-  static thread_local std::vector<bool> named_items_expectation;
-#endif
 protected:
   Json_writer* my_writer;
   Json_value_helper context;
@@ -382,43 +316,17 @@ protected:
   */
   bool closed;
 
-  explicit Json_writer_struct(Json_writer *writer)
-  : my_writer(writer)
+public:
+  explicit Json_writer_struct(THD *thd)
   {
+    my_writer= thd->opt_trace.get_current_json();
     context.init(my_writer);
     closed= false;
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-    named_items_expectation.push_back(expect_named_children);
-#endif
   }
-  explicit Json_writer_struct(THD *thd)
-  : Json_writer_struct(thd->opt_trace.get_current_json())
-  {
-  }
-
-public:
-
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-  virtual ~Json_writer_struct()
-  {
-    named_items_expectation.pop_back();
-  }
-#else
-  virtual ~Json_writer_struct() = default;
-#endif
-
-  inline bool trace_started() const
+  bool trace_started()
   {
     return my_writer != 0;
   }
-
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-  bool named_item_expected() const
-  {
-    return named_items_expectation.size() > 1
-        && *(named_items_expectation.rbegin() + 1);
-  }
-#endif
 };
 
 
@@ -438,23 +346,18 @@ private:
     my_writer->add_member(name);
   }
 public:
-  explicit Json_writer_object(Json_writer* writer, const char *str= nullptr)
-  : Json_writer_struct(writer)
+  explicit Json_writer_object(THD *thd)
+  : Json_writer_struct(thd)
   {
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-    DBUG_ASSERT(named_item_expected());
-#endif
     if (unlikely(my_writer))
-    {
-      if (str)
-        my_writer->add_member(str);
       my_writer->start_object();
-    }
   }
 
-  explicit Json_writer_object(THD* thd, const char *str= nullptr)
-  : Json_writer_object(thd->opt_trace.get_current_json(), str)
+  explicit Json_writer_object(THD* thd, const char *str)
+    : Json_writer_struct(thd)
   {
+    if (unlikely(my_writer))
+      my_writer->add_member(str).start_object();
   }
 
   ~Json_writer_object()
@@ -474,22 +377,17 @@ public:
     }
     return *this;
   }
-
   Json_writer_object& add(const char *name, ulonglong value)
   {
     DBUG_ASSERT(!closed);
     if (my_writer)
     {
       add_member(name);
-      my_writer->add_ull(value);
+      context.add_ll(static_cast<longlong>(value));
     }
     return *this;
   }
-
-  template<class IntT,
-    typename= typename ::std::enable_if<std::is_integral<IntT>::value>::type
-  >
-  Json_writer_object& add(const char *name, IntT value)
+  Json_writer_object& add(const char *name, longlong value)
   {
     DBUG_ASSERT(!closed);
     if (my_writer)
@@ -499,7 +397,6 @@ public:
     }
     return *this;
   }
-
   Json_writer_object& add(const char *name, double value)
   {
     DBUG_ASSERT(!closed);
@@ -510,7 +407,18 @@ public:
     }
     return *this;
   }
-
+  #ifndef _WIN64
+  Json_writer_object& add(const char *name, size_t value)
+  {
+    DBUG_ASSERT(!closed);
+    if (my_writer)
+    {
+      add_member(name);
+      context.add_ll(static_cast<longlong>(value));
+    }
+    return *this;
+  }
+  #endif
   Json_writer_object& add(const char *name, const char *value)
   {
     DBUG_ASSERT(!closed);
@@ -611,25 +519,17 @@ public:
 class Json_writer_array : public Json_writer_struct
 {
 public:
-  explicit Json_writer_array(Json_writer *writer, const char *str= nullptr)
-    : Json_writer_struct(writer)
+  Json_writer_array(THD *thd): Json_writer_struct(thd)
   {
-#ifdef ENABLED_JSON_WRITER_CONSISTENCY_CHECKS
-    DBUG_ASSERT(!named_item_expected());
-#endif
     if (unlikely(my_writer))
-    {
-      if (str)
-        my_writer->add_member(str);
       my_writer->start_array();
-    }
   }
 
-  explicit Json_writer_array(THD *thd, const char *str= nullptr)
-    : Json_writer_array(thd->opt_trace.get_current_json(), str)
+  Json_writer_array(THD *thd, const char *str) : Json_writer_struct(thd)
   {
+    if (unlikely(my_writer))
+      my_writer->add_member(str).start_array();
   }
-
   ~Json_writer_array()
   {
     if (unlikely(my_writer && !closed))
@@ -638,7 +538,6 @@ public:
       closed= TRUE;
     }
   }
-
   void end()
   {
     DBUG_ASSERT(!closed);

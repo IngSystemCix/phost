@@ -70,7 +70,7 @@ typedef struct my_stat
   dev_t		st_rdev;	/* more major & minor device numbers (???) */
   off_t		st_size;	/* size of file */
   time_t	st_atime;	/* time for last read */
-  time_t	st_mtime;	/* time for last contents modify */
+  time_t	st_mtime;	/* time for last contens modify */
   time_t	st_ctime;	/* time for last inode or contents modify */
 } MY_STAT;
 
@@ -94,13 +94,13 @@ typedef struct fileinfo
 typedef struct st_my_dir	/* Struct returned from my_dir */
 {
   /*
-    These members are just copies of parts of DYNAMIC_ARRAY structure,
+    These members are just copies of parts of DYNAMIC_ARRAY structure, 
     which is allocated right after the end of MY_DIR structure (MEM_ROOT
     for storing names is also resides there). We've left them here because
     we don't want to change code that uses my_dir.
   */
   struct fileinfo	*dir_entry;
-  size_t		number_of_files;
+  uint			number_of_files;
 } MY_DIR;
 
 extern MY_DIR *my_dir(const char *path,myf MyFlags);

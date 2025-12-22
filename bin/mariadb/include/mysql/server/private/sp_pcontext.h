@@ -18,6 +18,10 @@
 #ifndef _SP_PCONTEXT_H_
 #define _SP_PCONTEXT_H_
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface			/* gcc class implementation */
+#endif
+
 #include "sql_string.h"                         // LEX_STRING
 #include "field.h"                              // Create_field
 #include "sql_array.h"                          // Dynamic_array
@@ -37,7 +41,7 @@ public:
   };
 
   /// Name of the SP-variable.
-  Lex_ident_column name;
+  LEX_CSTRING name;
 
   /// Mode of the SP-variable.
   enum_mode mode;
@@ -83,27 +87,6 @@ public:
                                          uint *row_field_offset);
 };
 
-
-/*
-  This class stores FETCH statement target variables:
-    FETCH cur INTO t1, t2, t2;
-  Targets can be:
-  - Local SP variables
-  - PACKAGE BODY variables
-*/
-class sp_fetch_target: public Sql_alloc,
-                       public sp_rcontext_addr
-{
-public:
-  LEX_CSTRING name;
-
-  sp_fetch_target(const LEX_CSTRING &name_arg, const sp_rcontext_addr &addr)
-   :sp_rcontext_addr(addr),
-    name(name_arg)
-  { }
-};
-
-
 ///////////////////////////////////////////////////////////////////////////
 
 /// This class represents an SQL/PSM label. Can refer to the identifier
@@ -133,7 +116,7 @@ public:
   };
 
   /// Name of the label.
-  Lex_ident_column name;
+  LEX_CSTRING name;
 
   /// Instruction pointer of the label.
   uint ip;
@@ -259,20 +242,28 @@ class sp_condition : public Sql_alloc
 {
 public:
   /// Name of the condition.
-  Lex_ident_column name;
+  LEX_CSTRING name;
 
   /// Value of the condition.
   sp_condition_value *value;
 
 public:
-  sp_condition(const Lex_ident_column &name_arg, sp_condition_value *value_arg)
+  sp_condition(const LEX_CSTRING *name_arg, sp_condition_value *value_arg)
    :Sql_alloc(),
-    name(name_arg),
+    name(*name_arg),
     value(value_arg)
   { }
+  sp_condition(const char *name_arg, size_t name_length_arg,
+               sp_condition_value *value_arg)
+   :value(value_arg)
+  {
+    name.str=    name_arg;
+    name.length= name_length_arg;
+  }
   bool eq_name(const LEX_CSTRING *str) const
   {
-    return name.streq(*str);
+    return system_charset_info->strnncoll(name.str, name.length,
+                                          str->str, str->length) == 0;
   }
 };
 
@@ -295,14 +286,14 @@ public:
     Note, m_param_context can be not NULL, but have no variables.
     This is also means a cursor with no parameters (similar to NULL).
 */
-class sp_pcursor: public Lex_ident_column
+class sp_pcursor: public LEX_CSTRING
 {
   class sp_pcontext *m_param_context; // Formal parameters
   class sp_lex_cursor *m_lex;         // The cursor statement LEX
 public:
   sp_pcursor(const LEX_CSTRING *name, class sp_pcontext *param_ctx,
              class sp_lex_cursor *lex)
-   :Lex_ident_column(*name), m_param_context(param_ctx), m_lex(lex)
+   :LEX_CSTRING(*name), m_param_context(param_ctx), m_lex(lex)
   { }
   class sp_pcontext *param_context() const { return m_param_context; }
   class sp_lex_cursor *lex() const { return m_lex; }
@@ -340,31 +331,6 @@ public:
     type(_type)
   { }
 };
-
-
-///////////////////////////////////////////////////////////////////////////
-
-/// This class represents 'DECLARE RECORD' statement.
-
-class sp_record : public Sql_alloc
-{
-public:
-  /// Name of the record.
-  Lex_ident_column name;
-  Row_definition_list *field;
-
-public:
-  sp_record(const Lex_ident_column &name_arg, Row_definition_list *prmfield) 
-   :Sql_alloc(),
-    name(name_arg),
-    field(prmfield)
-  { }
-  bool eq_name(const LEX_CSTRING *str) const
-  {
-    return name.streq(*str);
-  }
-};
-
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -406,28 +372,7 @@ public:
   class Lex_for_loop: public Lex_for_loop_st
   {
   public:
-    /*
-      The label poiting to the body start,
-      either explicit or automatically generated.
-      Used during generation of "ITERATE loop_label"
-      to check if "loop_label" is a FOR loop label.
-      - In case of a FOR loop, some additional code
-        (cursor fetch or iteger increment) is generated before
-        the backward jump to the beginning of the loop body.
-      - In case of other loop types (WHILE, REPEAT)
-        only the jump is generated.
-    */
-    const sp_label *m_start_label;
-
-    Lex_for_loop()
-     :m_start_label(NULL)
-    { Lex_for_loop_st::init(); }
-
-    Lex_for_loop(const Lex_for_loop_st &for_loop, const sp_label *start)
-     :m_start_label(start)
-    {
-      Lex_for_loop_st::operator=(for_loop);
-    }
+    Lex_for_loop() { init(); }
   };
 
 public:
@@ -501,9 +446,6 @@ public:
     DBUG_ASSERT(i < m_vars.elements());
     return m_vars.at(i);
   }
-
-  /// @return the number of variables with default values in this context.
-  uint default_context_var_count() const;
 
   /*
     Return the i-th last context variable.
@@ -642,7 +584,7 @@ public:
   // Conditions.
   /////////////////////////////////////////////////////////////////////////
 
-  bool add_condition(THD *thd, const Lex_ident_column &name,
+  bool add_condition(THD *thd, const LEX_CSTRING *name,
                                sp_condition_value *value);
 
   /// See comment for find_variable() above.
@@ -652,12 +594,12 @@ public:
   sp_condition_value *
   find_declared_or_predefined_condition(THD *thd, const LEX_CSTRING *name) const;
 
-  bool declare_condition(THD *thd, const Lex_ident_column &name,
+  bool declare_condition(THD *thd, const LEX_CSTRING *name,
                                    sp_condition_value *val)
   {
-    if (find_condition(&name, true))
+    if (find_condition(name, true))
     {
-      my_error(ER_SP_DUP_COND, MYF(0), name.str);
+      my_error(ER_SP_DUP_COND, MYF(0), name->str);
       return true;
     }
     return add_condition(thd, name, val);
@@ -738,34 +680,11 @@ public:
 
   void set_for_loop(const Lex_for_loop_st &for_loop)
   {
-    m_for_loop= Lex_for_loop(for_loop, last_label());
+    m_for_loop.init(for_loop);
   }
-  const Lex_for_loop &for_loop()
+  const Lex_for_loop_st &for_loop()
   {
     return m_for_loop;
-  }
-
-  /////////////////////////////////////////////////////////////////////////
-  // Record.
-  /////////////////////////////////////////////////////////////////////////
-
-  bool add_record(THD *thd,
-                  const Lex_ident_column &name,
-                  Row_definition_list *field);
-
-  sp_record *find_record(const LEX_CSTRING *name,
-                         bool current_scope_only) const;
-
-  bool declare_record(THD *thd,
-                      const Lex_ident_column &name,
-                      Row_definition_list *field)
-  {
-    if (find_record(&name, true))
-    {
-      my_error(ER_SP_DUP_DECL, MYF(0), name.str);
-      return true;
-    }
-    return add_record(thd, name, field);
   }
 
 private:
@@ -831,9 +750,6 @@ private:
 
   /// Stack of SQL-handlers.
   Dynamic_array<sp_handler *> m_handlers;
-
-  /// Stack of records.
-  Dynamic_array<sp_record *> m_records;
 
   /*
    In the below example the label <<lab>> has two meanings:

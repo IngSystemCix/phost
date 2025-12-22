@@ -21,8 +21,11 @@
   "public" interface to sys_var - server configuration variables.
 */
 
+#ifdef USE_PRAGMA_INTERFACE
+#pragma interface                       /* gcc class implementation */
+#endif
+
 #include <my_getopt.h>
-#include <my_attribute.h>
 
 class sys_var;
 class set_var;
@@ -81,11 +84,12 @@ protected:
   typedef bool (*on_update_function)(sys_var *self, THD *thd, enum_var_type type);
 
   int flags;            ///< or'ed flag_enum values
-  SHOW_TYPE show_val_type; ///< what value_ptr() returns for sql_show.cc
+  const SHOW_TYPE show_val_type; ///< what value_ptr() returns for sql_show.cc
   PolyLock *guard;      ///< *second* lock that protects the variable
   ptrdiff_t offset;     ///< offset to the value from global_system_variables
   on_check_function on_check;
   on_update_function on_update;
+  const char *const deprecation_substitute;
 
 public:
   sys_var(sys_var_chain *chain, const char *name_arg, const char *comment,
@@ -95,7 +99,7 @@ public:
           on_check_function on_check_func, on_update_function on_update_func,
           const char *substitute);
 
-  virtual ~sys_var() = default;
+  virtual ~sys_var() {}
 
   /**
     All the cleanup procedures should be performed here
@@ -127,11 +131,9 @@ public:
   int scope() const { return flags & SCOPE_MASK; }
   virtual CHARSET_INFO *charset(THD *thd) const
   {
-    return system_charset_info_for_i_s;
+    return system_charset_info;
   }
   bool is_readonly() const { return flags & READONLY; }
-  void update_flags(int new_flags) { flags = new_flags; }
-  int get_flags() const { return flags; }
   /**
     the following is only true for keycache variables,
     that support the syntax @@keycache_name.variable_name
@@ -245,11 +247,9 @@ protected:
     Typically it's the same as session_value_ptr(), but it's different,
     for example, for ENUM, that is printed as a string, but stored as a number.
   */
-  ATTRIBUTE_NO_UBSAN
   uchar *session_var_ptr(THD *thd) const
   { return ((uchar*)&(thd->variables)) + offset; }
 
-  ATTRIBUTE_NO_UBSAN
   uchar *global_var_ptr() const
   { return ((uchar*)&global_system_variables) + offset; }
 
@@ -278,8 +278,8 @@ protected:
 class set_var_base :public Sql_alloc
 {
 public:
-  set_var_base() = default;
-  virtual ~set_var_base() = default;
+  set_var_base() {}
+  virtual ~set_var_base() {}
   virtual int check(THD *thd)=0;           /* To check privileges etc. */
   virtual int update(THD *thd)=0;                  /* To set the value */
   virtual int light_check(THD *thd) { return check(thd); }   /* for PS */
@@ -326,11 +326,11 @@ public:
 
   set_var(THD *thd, enum_var_type type_arg, sys_var *var_arg,
           const LEX_CSTRING *base_name_arg, Item *value_arg);
-  bool is_system() override { return 1; }
-  int check(THD *thd) override;
-  int update(THD *thd) override;
-  int light_check(THD *thd) override;
-  bool is_var_optimizer_trace() const override
+  virtual bool is_system() { return 1; }
+  int check(THD *thd);
+  int update(THD *thd);
+  int light_check(THD *thd);
+  virtual bool is_var_optimizer_trace() const
   {
     extern sys_var *Sys_optimizer_trace_ptr;
     return var == Sys_optimizer_trace_ptr;
@@ -346,9 +346,9 @@ public:
   set_var_user(Item_func_set_user_var *item)
     :user_var_item(item)
   {}
-  int check(THD *thd) override;
-  int update(THD *thd) override;
-  int light_check(THD *thd) override;
+  int check(THD *thd);
+  int update(THD *thd);
+  int light_check(THD *thd);
 };
 
 /* For SET PASSWORD */
@@ -359,8 +359,8 @@ class set_var_password: public set_var_base
 public:
   set_var_password(LEX_USER *user_arg) :user(user_arg)
   {}
-  int check(THD *thd) override;
-  int update(THD *thd) override;
+  int check(THD *thd);
+  int update(THD *thd);
 };
 
 /* For SET ROLE */
@@ -371,8 +371,8 @@ class set_var_role: public set_var_base
   privilege_t access;
 public:
   set_var_role(LEX_CSTRING role_arg) : role(role_arg), access(NO_ACL) {}
-  int check(THD *thd) override;
-  int update(THD *thd) override;
+  int check(THD *thd);
+  int update(THD *thd);
 };
 
 /* For SET DEFAULT ROLE */
@@ -381,12 +381,12 @@ class set_var_default_role: public set_var_base
 {
   LEX_USER *user, *real_user;
   LEX_CSTRING role;
-  LEX_CSTRING real_role;
+  const char *real_role;
 public:
   set_var_default_role(LEX_USER *user_arg, LEX_CSTRING role_arg) :
     user(user_arg), role(role_arg) {}
-  int check(THD *thd) override;
-  int update(THD *thd) override;
+  int check(THD *thd);
+  int update(THD *thd);
 };
 
 /* For SET NAMES and SET CHARACTER SET */
@@ -404,8 +404,8 @@ public:
      character_set_results(result_coll_arg),
      collation_connection(connection_coll_arg)
   {}
-  int check(THD *thd) override;
-  int update(THD *thd) override;
+  int check(THD *thd);
+  int update(THD *thd);
 };
 
 
@@ -450,8 +450,7 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool free);
     }                                                   \
   } while(0)
 
-void set_sys_var_value_origin(void *ptr, enum sys_var::where here,
-                              const char *filename= NULL);
+void set_sys_var_value_origin(void *ptr, enum sys_var::where here);
 
 enum sys_var::where get_sys_var_value_origin(void *ptr);
 inline bool IS_SYSVAR_AUTOSIZE(void *ptr)
@@ -463,9 +462,6 @@ inline bool IS_SYSVAR_AUTOSIZE(void *ptr)
 bool fix_delay_key_write(sys_var *self, THD *thd, enum_var_type type);
 
 sql_mode_t expand_sql_mode(sql_mode_t sql_mode);
-#ifndef EMBEDDED_LIBRARY
-bool validate_redirect_url(char *str, size_t len);
-#endif
 const char *sql_mode_string_representation(uint bit_number);
 bool sql_mode_string_representation(THD *thd, sql_mode_t sql_mode,
                                     LEX_CSTRING *ls);
@@ -475,7 +471,7 @@ extern sys_var *Sys_autocommit_ptr, *Sys_last_gtid_ptr,
   *Sys_character_set_client_ptr, *Sys_character_set_connection_ptr,
   *Sys_character_set_results_ptr;
 
-CHARSET_INFO *get_old_charset_by_name(const LEX_CSTRING &name);
+CHARSET_INFO *get_old_charset_by_name(const char *old_name);
 
 int sys_var_init();
 uint sys_var_elements();
@@ -488,4 +484,5 @@ void free_engine_list(plugin_ref *list);
 plugin_ref *copy_engine_list(plugin_ref *list);
 plugin_ref *temp_copy_engine_list(THD *thd, plugin_ref *list);
 char *pretty_print_engine_list(THD *thd, plugin_ref *list);
+
 #endif

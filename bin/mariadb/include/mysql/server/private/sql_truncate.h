@@ -31,18 +31,20 @@ public:
   /**
     Constructor, used to represent a TRUNCATE statement.
   */
-  Sql_cmd_truncate_table() = default;
+  Sql_cmd_truncate_table()
+  {}
 
-  virtual ~Sql_cmd_truncate_table() = default;
+  virtual ~Sql_cmd_truncate_table()
+  {}
 
   /**
     Execute a TRUNCATE statement at runtime.
     @param thd the current thread.
     @return false on success.
   */
-  bool execute(THD *thd) override;
+  bool execute(THD *thd);
 
-  enum_sql_command sql_command_code() const override
+  virtual enum_sql_command sql_command_code() const
   {
     return SQLCOM_TRUNCATE;
   }

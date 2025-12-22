@@ -2,7 +2,7 @@
 #define MY_COMPILER_INCLUDED
 
 /* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2017, 2022, MariaDB Corporation.
+   Copyright (c) 2017, 2020, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -39,16 +39,15 @@
 
 /* GNU C/C++ */
 #if defined __GNUC__
+/* Convenience macro to test the minimum required GCC version. */
+# define MY_GNUC_PREREQ(maj, min) \
+    ((__GNUC__ << 16) + __GNUC_MINOR__ >= ((maj) << 16) + (min))
+/* Any after 2.95... */
 # define MY_ALIGN_EXT
-
-/*
-  __builtin_unreachable() removes the "statement may fall through" warning-as-
-  error when MY_ASSERT_UNREACHABLE() is used in "case xxx:" in switch (...)
-  statements.
-  abort() is there to prevent the execution from reaching the
-  __builtin_unreachable() as this may cause misleading stack traces.
-*/
-# define MY_ASSERT_UNREACHABLE()  { abort(); __builtin_unreachable(); }
+/* Comunicate to the compiler the unreachability of the code. */
+# if MY_GNUC_PREREQ(4,5)
+#   define MY_ASSERT_UNREACHABLE()   __builtin_unreachable()
+# endif
 
 /* Microsoft Visual C++ */
 #elif defined _MSC_VER
@@ -85,6 +84,10 @@
   Generic (compiler-independent) features.
 */
 
+#ifndef MY_GNUC_PREREQ
+# define MY_GNUC_PREREQ(maj, min) (0)
+#endif
+
 #ifndef MY_ALIGNOF
 # ifdef __cplusplus
     template<typename type> struct my_alignof_helper { char m1; type m2; };
@@ -96,7 +99,7 @@
 #endif
 
 #ifndef MY_ASSERT_UNREACHABLE
-# define MY_ASSERT_UNREACHABLE()  do { abort(); } while (0)
+# define MY_ASSERT_UNREACHABLE()  do { assert(0); } while (0)
 #endif
 
 /**
@@ -155,6 +158,7 @@ struct my_aligned_storage
 #ifdef __GNUC__
 # define ATTRIBUTE_NORETURN __attribute__((noreturn))
 # define ATTRIBUTE_NOINLINE __attribute__((noinline))
+# if MY_GNUC_PREREQ(4,3)
 /** Starting with GCC 4.3, the "cold" attribute is used to inform the
 compiler that a function is unlikely executed.  The function is
 optimized for size rather than speed and on many targets it is placed
@@ -163,8 +167,8 @@ appears close together improving code locality of non-cold parts of
 program.  The paths leading to call of cold functions within code are
 marked as unlikely by the branch prediction mechanism.  optimize a
 rarely invoked function for size instead for speed. */
-# define ATTRIBUTE_COLD __attribute__((cold))
-# define ATTRIBUTE_MALLOC __attribute__((malloc))
+#  define ATTRIBUTE_COLD __attribute__((cold))
+# endif
 #elif defined _MSC_VER
 # define ATTRIBUTE_NORETURN __declspec(noreturn)
 # define ATTRIBUTE_NOINLINE __declspec(noinline)
@@ -177,22 +181,6 @@ rarely invoked function for size instead for speed. */
 # define ATTRIBUTE_COLD /* empty */
 #endif
 
-#ifndef ATTRIBUTE_MALLOC
-# define ATTRIBUTE_MALLOC
-#endif
-
 #include <my_attribute.h>
-
-/*
-   C++11 thread_local incurs a performance penalty on some platforms
-   accessing "extern thread_local" variable (not static).
-   To workaround, we use the platform specific thread local
-   storage mechanism, which also available in plain C.
-*/
-#if defined (_MSC_VER)
-#  define MY_THREAD_LOCAL __declspec(thread)
-#else
-#  define MY_THREAD_LOCAL __thread
-#endif
 
 #endif /* MY_COMPILER_INCLUDED */

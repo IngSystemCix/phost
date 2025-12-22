@@ -42,7 +42,7 @@ extern "C" {
 #define HASH_THREAD_SPECIFIC 2  /* Mark allocated memory THREAD_SPECIFIC */
 
 typedef uint32 my_hash_value_type;
-typedef const uchar *(*my_hash_get_key)(const void *, size_t *, my_bool);
+typedef uchar *(*my_hash_get_key)(const uchar *,size_t*,my_bool);
 typedef my_hash_value_type (*my_hash_function)(CHARSET_INFO *,
                                                const uchar *, size_t);
 typedef void (*my_hash_free_key)(void *);
@@ -64,14 +64,14 @@ typedef struct st_hash {
 typedef uint HASH_SEARCH_STATE;
 
 #define my_hash_init(A,B,C,D,E,F,G,H,I) my_hash_init2(A,B,0,C,D,E,F,G,0,H,I)
-my_bool my_hash_init2(PSI_memory_key psi_key, HASH *hash, size_t growth_size,
-                      CHARSET_INFO *charset, size_t default_array_elements,
+my_bool my_hash_init2(PSI_memory_key psi_key, HASH *hash, uint growth_size,
+                      CHARSET_INFO *charset, ulong default_array_elements,
                       size_t key_offset, size_t key_length,
                       my_hash_get_key get_key, my_hash_function hash_function,
                       void (*free_element)(void*), uint flags);
 void my_hash_free(HASH *tree);
 void my_hash_reset(HASH *hash);
-uchar *my_hash_element(const HASH *hash, size_t idx);
+uchar *my_hash_element(HASH *hash, size_t idx);
 uchar *my_hash_search(const HASH *info, const uchar *key, size_t length);
 uchar *my_hash_search_using_hash_value(const HASH *info,
                                        my_hash_value_type hash_value,
