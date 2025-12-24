@@ -199,7 +199,7 @@ function Invoke-Doctor {
     Get-NginxStatus
     Get-ApacheStatus
     Get-MariaDBStatus
-    Write-Host "`nDiagnostics complete" -ForegroundColor Green
+    Write-Host "Diagnostics complete" -ForegroundColor Green
     Pause
 }
 
