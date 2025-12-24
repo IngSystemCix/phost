@@ -25,8 +25,7 @@ $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
 # Banner
 # -----------------------------
 function Show-Banner {
-
-$banner = @"
+    $banner = @"
                                                                                                     
                                               =------=+                                             
                                          -:..:::::::::::::-=                                        
