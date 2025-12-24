@@ -229,3 +229,5 @@ Sync.log
 /control/*.json
 /control/*.lock
 /control/*.pid
+
+/installer

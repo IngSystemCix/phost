@@ -66,11 +66,30 @@ Cliente → Nginx (TLS / Reverse Proxy) → Apache + PHP → Aplicación (htdocs
         └── 📁mariadb
         └── 📁nginx
         └── 📁php
+    └── 📁commands
+        ├── doctor.ps1
+        ├── down.ps1
+        ├── status.ps1
+        ├── up.ps1
     └── 📁control
+        ├── phost.lock
+        ├── README.md
+        ├── runtime.json
+        ├── state.json
     └── 📁htdocs
         └── 📁phpMyAdmin
+        ├── favicon.png
+        ├── index.css
+        ├── index.html
     └── 📁installer
+    └── 📁lib
+        └── 📁logs
+            └── 📁nginx
+        ├── apache.ps1
+        ├── mariadb.ps1
+        ├── nginx.ps1
     └── 📁logs
+        └── 📁apache
         └── 📁mariadb
         └── 📁nginx
         └── 📁php
@@ -78,6 +97,7 @@ Cliente → Nginx (TLS / Reverse Proxy) → Apache + PHP → Aplicación (htdocs
     ├── CODE OF CONDUCT.md
     ├── CONTRIBUTING.md
     ├── LICENSE
+    ├── phost.ps1
     ├── README.md
     └── SECURITY.md
 ```
