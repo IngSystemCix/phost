@@ -111,7 +111,6 @@ function Show-Banner {
     Write-Host ""
 }
 
-
 function Show-Header {
     Clear-Host
     Show-Banner
@@ -200,7 +199,7 @@ function Invoke-Doctor {
     Get-NginxStatus
     Get-ApacheStatus
     Get-MariaDBStatus
-    Write-Host "`nDiagnostics complete"
+    Write-Host "\`nDiagnostics complete" -ForegroundColor Green
     Pause
 }
 
