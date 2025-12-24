@@ -33,7 +33,7 @@ function Show-Banner {
         Write-Host "PHOST" -ForegroundColor Cyan
     }
 
-    Write-Host "PHOST — CLI-first local hosting stack for Windows" -ForegroundColor White
+    Write-Host "PHOST - CLI-first local hosting stack for Windows" -ForegroundColor White
     Write-Host "------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "Author: Juan Romero Collazos" -ForegroundColor DarkGray
     Write-Host "------------------------------------------------" -ForegroundColor DarkGray
