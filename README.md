@@ -19,6 +19,15 @@ Plataforma local de **desarrollo y hosting local** robusta que reestructura el m
 
 ---
 
+## Explicación de la instalación
+
+<video controls width="100%">
+  <source src="assets/explicacion.mp4" type="video/mp4">
+  Tu navegador no soporta video HTML5.
+</video>
+
+---
+
 ## Visión General
 
 PHOST nace para ofrecer una alternativa más versátil, controlable y estable al stack tradicional tipo XAMPP, priorizando la operación por consola y la prevención de fallos críticos (especialmente pérdida de datos).
