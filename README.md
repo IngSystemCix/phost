@@ -28,6 +28,16 @@ Plataforma local de **desarrollo y hosting local** robusta que reestructura el m
 
 ---
 
+## Permisos en Windows (Idiomas independientes)
+
+PHOST puede requerir permisos de escritura (crear carpetas, logs, cache, backups) cuando se instala bajo rutas protegidas como `C:\Program Files`.
+
+```cmd
+icacls "C:\Program Files\PHOST" /grant %USERNAME%:(OI)(CI)M /T
+```
+
+---
+
 ## Visión General
 
 PHOST nace para ofrecer una alternativa más versátil, controlable y estable al stack tradicional tipo XAMPP, priorizando la operación por consola y la prevención de fallos críticos (especialmente pérdida de datos).
