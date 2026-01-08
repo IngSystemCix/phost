@@ -1,0 +1,40 @@
+name: Release phost
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write   # necesario para tags y releases
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' control/runtime.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP
+        run: |
+          zip -r phost-${{ steps.version.outputs.version }}.zip . \
+            -x "*.git*" "backups/*" "logs/*"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: phost v${{ steps.version.outputs.version }}
+          files: phost-${{ steps.version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

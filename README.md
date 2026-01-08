@@ -92,8 +92,6 @@ Cliente → Nginx (TLS / Reverse Proxy) → Apache + PHP → Aplicación (htdocs
         ├── index.html
     └── 📁installer
     └── 📁lib
-        └── 📁logs
-            └── 📁nginx
         ├── apache.ps1
         ├── mariadb.ps1
         ├── nginx.ps1
