@@ -231,3 +231,6 @@ Sync.log
 /control/*.pid
 
 /installer
+
+# Runtime versionado (usado para releases y CI/CD)
+!/control/runtime.json
