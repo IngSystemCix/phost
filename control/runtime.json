@@ -1,0 +1,18 @@
+{
+  "app": "phost",
+  "version": "1.1.0",
+  "channel": "stable",
+  "build": {
+    "number": 1,
+    "commit": "local",
+    "date": "2026-01-08"
+  },
+  "environment": {
+    "os": "windows",
+    "arch": "x64"
+  },
+  "update": {
+    "autoCheck": true,
+    "lastCheck": null
+  }
+}
