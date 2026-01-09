@@ -1,8 +1,8 @@
 # PHOST - CLI-first local hosting stack for Windows
-# Version 1.1.0
+# Version 1.3.0
 # Author: Juan Romero Collazos
 
-$PHOST_VERSION = "1.2.0"
+$PHOST_VERSION = "1.3.0"
 $ROOT = Split-Path -Parent (Resolve-Path $MyInvocation.MyCommand.Path)
 
 # -----------------------------

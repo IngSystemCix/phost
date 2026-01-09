@@ -1,41 +1,33 @@
 function Invoke-Doctor {
 
-    Write-Host "Running PHOST system check..." -ForegroundColor Magenta
-    Write-Host "--------------------------------" -ForegroundColor DarkGray
+    Clear-Host
+    Write-Host "Running PHOST system diagnostics..." -ForegroundColor Magenta
+    Write-Host "-----------------------------------" -ForegroundColor DarkGray
+
+    $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Definition
+    $errors = 0
 
     # =========================
     # BINARIOS
     # =========================
+    Write-Host ""
     Write-Host "Checking binaries..." -ForegroundColor Cyan
 
-    $errors = 0
-
-    if (-Not (Test-Path "bin/nginx/nginx.exe")) {
-        Write-Host "✖ Nginx missing" -ForegroundColor Red
-        $errors++
-    } else {
-        Write-Host "✔ Nginx OK" -ForegroundColor Green
+    $binaries = @{
+        "Nginx"    = "bin\nginx\nginx.exe"
+        "Apache"  = "bin\apache\bin\httpd.exe"
+        "MariaDB" = "bin\mariadb\bin\mysqld.exe"
+        "PHP"     = "bin\php\php.exe"
     }
 
-    if (-Not (Test-Path "bin/apache/bin/httpd.exe")) {
-        Write-Host "✖ Apache missing" -ForegroundColor Red
-        $errors++
-    } else {
-        Write-Host "✔ Apache OK" -ForegroundColor Green
-    }
-
-    if (-Not (Test-Path "bin/mariadb/bin/mysqld.exe")) {
-        Write-Host "✖ MariaDB missing" -ForegroundColor Red
-        $errors++
-    } else {
-        Write-Host "✔ MariaDB OK" -ForegroundColor Green
-    }
-
-    if (-Not (Test-Path "bin/php/php.exe")) {
-        Write-Host "✖ PHP missing" -ForegroundColor Red
-        $errors++
-    } else {
-        Write-Host "✔ PHP OK" -ForegroundColor Green
+    foreach ($bin in $binaries.GetEnumerator()) {
+        $path = Join-Path $ROOT $bin.Value
+        if (-not (Test-Path $path)) {
+            Write-Host "✖ $($bin.Key) missing" -ForegroundColor Red
+            $errors++
+        } else {
+            Write-Host "✔ $($bin.Key) OK" -ForegroundColor Green
+        }
     }
 
     # =========================
@@ -44,10 +36,11 @@ function Invoke-Doctor {
     Write-Host ""
     Write-Host "Checking ports..." -ForegroundColor Cyan
 
-    $ports = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort
+    $listeningPorts = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+                      Select-Object -ExpandProperty LocalPort
 
     foreach ($port in @(80, 8080, 3306)) {
-        if ($ports -contains $port) {
+        if ($listeningPorts -contains $port) {
             Write-Host "⚠ Port $port is in use" -ForegroundColor Yellow
         } else {
             Write-Host "✔ Port $port available" -ForegroundColor Green
@@ -61,26 +54,40 @@ function Invoke-Doctor {
     Write-Host "Checking updates..." -ForegroundColor Cyan
 
     try {
-        $runtime = Get-Content "control/runtime.json" | ConvertFrom-Json
-        $localVersion = $runtime.version
+        $runtimePath = Join-Path $ROOT "control\runtime.json"
+
+        if (-not (Test-Path $runtimePath)) {
+            throw "runtime.json not found"
+        }
+
+        $runtime = Get-Content $runtimePath -Raw | ConvertFrom-Json
+        $localVersion = $runtime.version.Trim()
 
         $repo = "IngSystemCix/phost"
         $api  = "https://api.github.com/repos/$repo/releases/latest"
 
         $response = Invoke-RestMethod -Uri $api -Headers @{
-            "User-Agent" = "phost"
+            "User-Agent" = "phost-cli"
         }
 
-        $remoteVersion = $response.tag_name.TrimStart("v")
+        if (-not $response.tag_name) {
+            throw "No release information available"
+        }
+
+        $remoteVersion = $response.tag_name.Trim().TrimStart("v")
 
         if ($remoteVersion -ne $localVersion) {
-            Write-Host "⚠ Update available: v$remoteVersion (installed: v$localVersion)" -ForegroundColor Yellow
-            Write-Host "👉 Run: phost update" -ForegroundColor DarkYellow
+            Write-Host "⚠ Update available" -ForegroundColor Yellow
+            Write-Host "   Installed : v$localVersion" -ForegroundColor DarkYellow
+            Write-Host "   Available : v$remoteVersion" -ForegroundColor DarkYellow
+            Write-Host "👉 Run: phost update" -ForegroundColor Cyan
         } else {
             Write-Host "✔ PHOST is up to date (v$localVersion)" -ForegroundColor Green
         }
-    } catch {
+    }
+    catch {
         Write-Host "⚠ Unable to check updates" -ForegroundColor DarkYellow
+        Write-Host "   $($_.Exception.Message)" -ForegroundColor DarkGray
     }
 
     # =========================
@@ -88,10 +95,11 @@ function Invoke-Doctor {
     # =========================
     Write-Host ""
     if ($errors -gt 0) {
-        Write-Host "Doctor completed with issues" -ForegroundColor Red
+        Write-Host "Doctor completed with issues ($errors found)" -ForegroundColor Red
     } else {
         Write-Host "Doctor completed successfully" -ForegroundColor Magenta
     }
 
+    Write-Host ""
     Pause
 }
